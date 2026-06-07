@@ -1,3 +1,4 @@
+
 -- Main script connecting all modules
 local Aimbot     = loadstring(game:HttpGet("https://raw.githubusercontent.com/jaikinpicio-bot/ChrisM/refs/heads/main/Aimbot.lua"))()
 local ESP        = loadstring(game:HttpGet("https://raw.githubusercontent.com/jaikinpicio-bot/ChrisM/refs/heads/main/ESP.lua"))()
@@ -5,14 +6,24 @@ local Fullbright = loadstring(game:HttpGet("https://raw.githubusercontent.com/ja
 local Teleport   = loadstring(game:HttpGet("https://raw.githubusercontent.com/jaikinpicio-bot/ChrisM/refs/heads/main/Teleport.lua"))()
 local UI         = loadstring(game:HttpGet("https://raw.githubusercontent.com/jaikinpicio-bot/ChrisM/refs/heads/main/UI.lua"))()
 
--- Initialize your UI and pass the modules into it so your buttons work
-if UI and UI.Init then
-    UI.Init({
+print("Main loaded. Modules are ready for use!")
+
+-- Securely pass the modules over to the UI if it handles them globally
+if type(UI) == "table" then
+    UI.ActiveModules = {
         Aimbot = Aimbot,
         ESP = ESP,
         Fullbright = Fullbright,
         Teleport = Teleport
-    })
+    }
+    
+    -- Actively fire your custom mount function to display the ScreenGui
+    if UI.mount then
+        UI.mount()
+        print("UI successfully mounted to screen!")
+    else
+        print("Error: UI table loaded, but UI.mount function was missing.")
+    end
 else
-    print("Main loaded. Modules are ready for use!")
+    print("Error: UI module failed to return a table structure.")
 end
