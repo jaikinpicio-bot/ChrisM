@@ -1,29 +1,44 @@
+-- Debugger Main Script
+local RepoURL = "https://githubusercontent.com"
 
--- Main script connecting all modules
-local Aimbot     = loadstring(game:HttpGet("https://raw.githubusercontent.com/jaikinpicio-bot/ChrisM/refs/heads/main/Aimbot.lua"))()
-local ESP        = loadstring(game:HttpGet("https://raw.githubusercontent.com/jaikinpicio-bot/ChrisM/refs/heads/main/ESP.lua"))()
-local Fullbright = loadstring(game:HttpGet("https://raw.githubusercontent.com/jaikinpicio-bot/ChrisM/refs/heads/main/Fullbright.lua"))()
-local Teleport   = loadstring(game:HttpGet("https://raw.githubusercontent.com/jaikinpicio-bot/ChrisM/refs/heads/main/Teleport.lua"))()
-local UI         = loadstring(game:HttpGet("https://raw.githubusercontent.com/jaikinpicio-bot/ChrisM/refs/heads/main/UI.lua"))()
-
-print("Main loaded. Modules are ready for use!")
-
--- Securely pass the modules over to the UI if it handles them globally
-if type(UI) == "table" then
-    UI.ActiveModules = {
-        Aimbot = Aimbot,
-        ESP = ESP,
-        Fullbright = Fullbright,
-        Teleport = Teleport
-    }
+local function safeLoad(fileName)
+    local success, content = pcall(function()
+        return game:HttpGet(RepoURL .. fileName)
+    end)
     
-    -- Actively fire your custom mount function to display the ScreenGui
-    if UI.mount then
-        UI.mount()
-        print("UI successfully mounted to screen!")
-    else
-        print("Error: UI table loaded, but UI.mount function was missing.")
+    if not success or not content then
+        warn("❌ Failed to download: " .. fileName)
+        return nil
     end
-else
-    print("Error: UI module failed to return a table structure.")
+    
+    local func, err = loadstring(content)
+    if not func then
+        -- This will print out exactly WHICH file is causing the "bytecode corrupted" crash
+        warn("❌ SYNTAX ERROR IN " .. fileName .. ": " .. tostring(err))
+        return nil
+    end
+    
+    local execSuccess, result = pcall(func)
+    if not execSuccess then
+        warn("❌ RUNTIME ERROR IN " .. fileName .. ": " .. tostring(result))
+        return nil
+    end
+    
+    print("✅ " .. fileName .. " loaded perfectly.")
+    return result
+end
+
+-- Test each module individually
+print("--- STARTING SYSTEM DIAGNOSTICS ---")
+local Aimbot     = safeLoad("Aimbot.lua")
+local ESP        = safeLoad("ESP.lua")
+local Fullbright = safeLoad("Fullbright.lua")
+local Teleport   = safeLoad("Teleport.lua")
+local UI         = safeLoad("UI.lua")
+print("--- DIAGNOSTICS COMPLETE ---")
+
+-- Run the UI if it'll work
+if type(UI) == "table" then
+    UI.ActiveModules = { Aimbot = Aimbot, ESP = ESP, Fullbright = Fullbright, Teleport = Teleport }
+    if UI.mount then UI.mount() end
 end
