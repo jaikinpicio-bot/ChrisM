@@ -1,5 +1,5 @@
--- Debugger Main Script
-local RepoURL = "https://githubusercontent.com"
+-- Debugger Main Script (FIXED REPO LINKS)
+local RepoURL = "https://raw.githubusercontent.com/jaikinpicio-bot/ChrisM/refs/heads/main/"
 
 local function safeLoad(fileName)
     local success, content = pcall(function()
@@ -13,7 +13,6 @@ local function safeLoad(fileName)
     
     local func, err = loadstring(content)
     if not func then
-        -- This will print out exactly WHICH file is causing the "bytecode corrupted" crash
         warn("❌ SYNTAX ERROR IN " .. fileName .. ": " .. tostring(err))
         return nil
     end
@@ -28,17 +27,14 @@ local function safeLoad(fileName)
     return result
 end
 
--- Test each module individually
-print("--- STARTING SYSTEM DIAGNOSTICS ---")
-local Aimbot     = safeLoad("Aimbot.lua")
-local ESP        = safeLoad("ESP.lua")
-local Fullbright = safeLoad("Fullbright.lua")
-local Teleport   = safeLoad("Teleport.lua")
-local UI         = safeLoad("UI.lua")
-print("--- DIAGNOSTICS COMPLETE ---")
+-- Load Modules
+safeLoad("Aimbot.lua")
+safeLoad("ESP.lua")
+safeLoad("Fullbright.lua")
+safeLoad("Teleport.lua")
+local UI = safeLoad("UI.lua")
 
--- Run the UI if it'll work
-if type(UI) == "table" then
-    UI.ActiveModules = { Aimbot = Aimbot, ESP = ESP, Fullbright = Fullbright, Teleport = Teleport }
-    if UI.mount then UI.mount() end
+-- Mount UI
+if type(UI) == "table" and UI.mount then 
+    UI.mount() 
 end
