@@ -11,11 +11,15 @@ local Aimbot     = load("Aimbot.lua")
 local ESP        = load("ESP.lua")
 local Fullbright = load("Fullbright.lua")
 local Teleport   = load("Teleport.lua")
+local ItemESP    = load("ItemESP.lua")
+local EventESP   = load("EventESP.lua")
 local UI         = load("UI.lua")
 
 Aimbot:Init()
 ESP:Init()
 Teleport:Init()
+ItemESP:Init()
+EventESP:Init()
 
 -- ══════════════════════════════════════════
 -- VISUALS PAGE
@@ -23,21 +27,58 @@ Teleport:Init()
 local VisualsPage = UI.makePage("Visuals")
 UI.makePageTitle(VisualsPage, "Visuals")
 
-UI.makeSectionLabel(VisualsPage, 0, "— ESP")
+-- ── Player ESP ────────────────────────────
+UI.makeSectionLabel(VisualsPage, 0, "— Player ESP")
 
-local subChams, subHealth, subSkeleton
+local subChams, subHealth, subSkeleton, subBoxes, subNames, subWeapon
 
-UI.makeToggleRow(VisualsPage, 0, "ESP  (Names + Boxes)", false, function(state)
+UI.makeToggleRow(VisualsPage, 0, "ESP", false, function(state)
     ESP:SetEnabled(state)
     subChams.Visible    = state
     subHealth.Visible   = state
     subSkeleton.Visible = state
+    subBoxes.Visible    = state
+    subNames.Visible    = state
+    subWeapon.Visible   = state
 end)
 
 subChams    = UI.makeSubToggleRow(VisualsPage, 0, "Chams",        false, function(s) ESP:SetChams(s)    end)
 subHealth   = UI.makeSubToggleRow(VisualsPage, 0, "Health Bars",  false, function(s) ESP.HealthBars = s end)
-subSkeleton = UI.makeSubToggleRow(VisualsPage, 0, "Skeleton ESP", false, function(s) ESP:SetSkeleton(s) end)
+subSkeleton = UI.makeSubToggleRow(VisualsPage, 0, "Skeleton",     false, function(s) ESP:SetSkeleton(s) end)
+subBoxes    = UI.makeSubToggleRow(VisualsPage, 0, "Boxes",        true,  function(s) ESP.Boxes = s      end)
+subNames    = UI.makeSubToggleRow(VisualsPage, 0, "Names",        true,  function(s) ESP.Names = s      end)
+subWeapon   = UI.makeSubToggleRow(VisualsPage, 0, "Weapon Label", true,  function(s) ESP.WeaponText = s end)
 
+-- ── Item ESP ──────────────────────────────
+UI.makeSectionLabel(VisualsPage, 0, "— Item ESP")
+
+local subZombies, subAccessories
+
+UI.makeToggleRow(VisualsPage, 0, "Item ESP", false, function(state)
+    ItemESP:SetEnabled(state)
+    subZombies.Visible     = state
+    subAccessories.Visible = state
+end)
+
+subZombies     = UI.makeSubToggleRow(VisualsPage, 0, "Zombies",     true, function(s) ItemESP:SetZombies(s)     end)
+subAccessories = UI.makeSubToggleRow(VisualsPage, 0, "Accessories", true, function(s) ItemESP:SetAccessories(s) end)
+
+UI.makeSliderRow(VisualsPage, 0, "Item ESP Distance (m)", 50, 2000, 500, function(val)
+    ItemESP.MaxDistance = val
+end)
+
+-- ── Event ESP ─────────────────────────────
+UI.makeSectionLabel(VisualsPage, 0, "— Event ESP")
+
+UI.makeToggleRow(VisualsPage, 0, "Event ESP", false, function(state)
+    EventESP:SetEnabled(state)
+end)
+
+UI.makeSliderRow(VisualsPage, 0, "Event ESP Distance (m)", 50, 5000, 1000, function(val)
+    EventESP.MaxDistance = val
+end)
+
+-- ── World ─────────────────────────────────
 UI.makeSectionLabel(VisualsPage, 0, "— World")
 UI.makeToggleRow(VisualsPage, 0, "Fullbright", false, function(state)
     Fullbright:SetEnabled(state)
@@ -149,6 +190,8 @@ UI.setupDrag()
 UI.setupWindowControls(function()
     Aimbot:Destroy()
     ESP:Destroy()
+    ItemESP:Destroy()
+    EventESP:Destroy()
     if Fullbright.Enabled then Fullbright:Remove() end
     if Teleport.IsTracking then Teleport:StopTracking() end
 end)
