@@ -13,13 +13,11 @@ local ItemESP = {}
 ItemESP.Enabled     = false
 ItemESP.Zombies     = true
 ItemESP.Accessories = true
-ItemESP.MaxDistance = 500  -- slider controlled
+ItemESP.MaxDistance = 500
 
--- Same red as player ESP so everything reads consistently
 local ESP_COLOR  = Color3.fromRGB(255, 0, 0)
 local TEXT_COLOR = Color3.fromRGB(255, 255, 255)
 
--- Accessory prefix patterns (as per your info)
 local ACCESSORY_PREFIXES = { "Accessory", "Belt", "Hat" }
 
 local function isAccessory(name)
@@ -29,8 +27,15 @@ local function isAccessory(name)
     return false
 end
 
+-- ── Zombie detection ───────────────────────────────────────
+-- Only models that are direct children of Workspace.Zombies
+local function isZombie(model)
+    local zombieFolder = Workspace:FindFirstChild("Zombies")
+    if not zombieFolder then return false end
+    return model.Parent == zombieFolder
+end
+
 -- ── Item registry ──────────────────────────────────────────
--- Built from ReplicatedStorage > Assets > Items
 local TargetItems = {}
 
 local function buildRegistry()
@@ -46,9 +51,9 @@ local function buildRegistry()
     end
 end
 
--- ── Zombie detection ───────────────────────────────────────
--- A model is considered a zombie if it has a Humanoid but is NOT a player character
+-- ── Player char registry (so we never tag player accessories) ──
 local playerChars = {}
+
 local function refreshPlayerChars()
     playerChars = {}
     for _, p in ipairs(Players:GetPlayers()) do
@@ -56,10 +61,33 @@ local function refreshPlayerChars()
     end
 end
 
-local function isZombie(model)
-    if playerChars[model] then return false end
-    local humanoid = model:FindFirstChildOfClass("Humanoid")
-    return humanoid ~= nil and humanoid.Health > 0
+local function isOwnedByPlayer(model)
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Character and model:IsDescendantOf(p.Character) then
+            return true
+        end
+    end
+    return false
+end
+
+-- ── Should this model have ESP? ────────────────────────────
+local function shouldESP(model)
+    if not ItemESP.Enabled then return false end
+    if isOwnedByPlayer(model) then return false end  -- never tag player-worn items
+
+    if isZombie(model) then
+        return ItemESP.Zombies
+    end
+
+    if isAccessory(model.Name) then
+        return ItemESP.Accessories
+    end
+
+    if TargetItems[model.Name:lower()] then
+        return true
+    end
+
+    return false
 end
 
 -- ── Apply / remove ESP on a model ─────────────────────────
@@ -71,7 +99,6 @@ local function applyESP(model)
         or model:FindFirstChildWhichIsA("BasePart")
     if not anchor then return end
 
-    -- Highlight
     local hl = Instance.new("Highlight")
     hl.Name                = "_ItemESP"
     hl.FillColor           = ESP_COLOR
@@ -82,25 +109,23 @@ local function applyESP(model)
     hl.Adornee             = model
     hl.Parent              = model
 
-    -- Billboard distance label
     local bb = Instance.new("BillboardGui")
-    bb.Name           = "_ItemESPBB"
-    bb.Size           = UDim2.new(0, 200, 0, 50)
-    bb.AlwaysOnTop    = true
-    bb.ExtentsOffset  = Vector3.new(0, 1.5, 0)
-    bb.Adornee        = anchor
-    bb.Parent         = model
+    bb.Name          = "_ItemESPBB"
+    bb.Size          = UDim2.new(0, 200, 0, 50)
+    bb.AlwaysOnTop   = true
+    bb.ExtentsOffset = Vector3.new(0, 1.5, 0)
+    bb.Adornee       = anchor
+    bb.Parent        = model
 
     local lbl = Instance.new("TextLabel")
-    lbl.Size                    = UDim2.new(1, 0, 1, 0)
-    lbl.BackgroundTransparency  = 1
-    lbl.TextColor3              = TEXT_COLOR
-    lbl.TextSize                = 14
-    lbl.Font                    = Enum.Font.SourceSansBold
-    lbl.TextStrokeTransparency  = 0
-    lbl.Parent                  = bb
+    lbl.Size                   = UDim2.new(1, 0, 1, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.TextColor3             = TEXT_COLOR
+    lbl.TextSize               = 14
+    lbl.Font                   = Enum.Font.SourceSansBold
+    lbl.TextStrokeTransparency = 0
+    lbl.Parent                 = bb
 
-    -- Distance update loop
     task.spawn(function()
         while model and model.Parent and anchor and anchor.Parent do
             if not ItemESP.Enabled then
@@ -132,36 +157,13 @@ local function removeESP(model)
     if bb then bb:Destroy() end
 end
 
--- ── Decide whether to ESP a model ─────────────────────────
-local function evaluate(model)
-    if not model:IsA("Model") then return end
-    if not ItemESP.Enabled then return end
-
-    local name = model.Name
-
-    -- Zombie check
-    if ItemESP.Zombies and isZombie(model) then
-        applyESP(model); return
-    end
-
-    -- Accessory check
-    if ItemESP.Accessories and isAccessory(name) then
-        applyESP(model); return
-    end
-
-    -- Registered item check
-    if TargetItems[name:lower()] then
-        applyESP(model); return
-    end
-end
-
 -- ── Re-evaluate all existing models ───────────────────────
 local function scanAll()
     refreshPlayerChars()
     for _, desc in ipairs(Workspace:GetDescendants()) do
         if desc:IsA("Model") then
-            if ItemESP.Enabled then
-                evaluate(desc)
+            if shouldESP(desc) then
+                applyESP(desc)
             else
                 removeESP(desc)
             end
@@ -188,7 +190,7 @@ end
 function ItemESP:Init()
     buildRegistry()
 
-    -- Track player characters so we don't tag them as zombies
+    -- Track player characters
     Players.PlayerAdded:Connect(function(p)
         p.CharacterAdded:Connect(function(c)
             playerChars[c] = true
@@ -202,16 +204,22 @@ function ItemESP:Init()
         if p.Character then playerChars[p.Character] = true end
     end
 
-    -- Scan existing world
     scanAll()
 
     -- Watch for newly streamed-in models
     Workspace.DescendantAdded:Connect(function(desc)
         if not ItemESP.Enabled then return end
         if not desc:IsA("Model") then return end
-        task.wait(0.1)  -- let properties replicate
+        task.wait(0.1)
         refreshPlayerChars()
-        evaluate(desc)
+        if shouldESP(desc) then applyESP(desc) end
+    end)
+
+    -- Clean up when models are removed
+    Workspace.DescendantRemoving:Connect(function(desc)
+        if desc:IsA("Model") then
+            removeESP(desc)
+        end
     end)
 end
 
