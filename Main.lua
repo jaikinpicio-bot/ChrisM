@@ -4,11 +4,14 @@
 local BASE = "https://raw.githubusercontent.com/jaikinpicio-bot/ChrisM/main/"
 
 local function load(path)
+    print("⏳ Loading: " .. path)
     local src = game:HttpGet(BASE .. path)
+    print("📦 Got " .. #src .. " bytes for: " .. path)
     local fn, err = loadstring(src)
     if not fn then
-        error("Failed to load " .. path .. ": " .. tostring(err), 2)
+        error("❌ COMPILE ERROR in " .. path .. ": " .. tostring(err), 2)
     end
+    print("✅ OK: " .. path)
     return fn()
 end
 
