@@ -1,13 +1,17 @@
 -- =====================
 -- MAIN: ChrisM Hub
 -- =====================
-local task = task
+local BASE = "https://raw.githubusercontent.com/jaikinpicio-bot/ChrisM/main/"
 
-local Aimbot     = require(script.Parent.Aimbot)
-local ESP        = require(script.Parent.ESP)
-local Fullbright = require(script.Parent.Fullbright)
-local Teleport   = require(script.Parent.Teleport)
-local UI         = require(script.Parent.UI)
+local function load(path)
+    return loadstring(game:HttpGet(BASE .. path))()
+end
+
+local Aimbot     = load("Aimbot.lua")
+local ESP        = load("ESP.lua")
+local Fullbright = load("Fullbright.lua")
+local Teleport   = load("Teleport.lua")
+local UI         = load("UI.lua")
 
 Aimbot:Init()
 ESP:Init()
@@ -30,9 +34,9 @@ UI.makeToggleRow(VisualsPage, 0, "ESP  (Names + Boxes)", false, function(state)
     subSkeleton.Visible = state
 end)
 
-subChams    = UI.makeSubToggleRow(VisualsPage, 0, "Chams",        false, function(s) ESP:SetChams(s)     end)
-subHealth   = UI.makeSubToggleRow(VisualsPage, 0, "Health Bars",  false, function(s) ESP.HealthBars = s  end)
-subSkeleton = UI.makeSubToggleRow(VisualsPage, 0, "Skeleton ESP", false, function(s) ESP:SetSkeleton(s)  end)
+subChams    = UI.makeSubToggleRow(VisualsPage, 0, "Chams",        false, function(s) ESP:SetChams(s)    end)
+subHealth   = UI.makeSubToggleRow(VisualsPage, 0, "Health Bars",  false, function(s) ESP.HealthBars = s end)
+subSkeleton = UI.makeSubToggleRow(VisualsPage, 0, "Skeleton ESP", false, function(s) ESP:SetSkeleton(s) end)
 
 UI.makeSectionLabel(VisualsPage, 0, "— World")
 UI.makeToggleRow(VisualsPage, 0, "Fullbright", false, function(state)
