@@ -4,7 +4,12 @@
 local BASE = "https://raw.githubusercontent.com/jaikinpicio-bot/ChrisM/main/"
 
 local function load(path)
-    return loadstring(game:HttpGet(BASE .. path))()
+    local src = game:HttpGet(BASE .. path)
+    local fn, err = loadstring(src)
+    if not fn then
+        error("Failed to load " .. path .. ": " .. tostring(err), 2)
+    end
+    return fn()
 end
 
 local Aimbot     = load("Aimbot.lua")
