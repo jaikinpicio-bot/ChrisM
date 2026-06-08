@@ -1,50 +1,152 @@
--- Direct Debugger Loader (Unbreakable URL version)
-local function safeLoadDirect(url, fileName)
-    local success, content = pcall(function()
-        return game:HttpGet(url)
+-- =====================
+-- MAIN: ChrisM Hub
+-- =====================
+local task = task
+
+local Aimbot     = require(script.Parent.Modules.Aimbot)
+local ESP        = require(script.Parent.Modules.ESP)
+local Fullbright = require(script.Parent.Modules.Fullbright)
+local Teleport   = require(script.Parent.Modules.Teleport)
+local UI         = require(script.Parent.Modules.UI)
+
+Aimbot:Init()
+ESP:Init()
+Teleport:Init()
+
+-- ══════════════════════════════════════════
+-- VISUALS PAGE
+-- ══════════════════════════════════════════
+local VisualsPage = UI.makePage("Visuals")
+UI.makePageTitle(VisualsPage, "Visuals")
+
+UI.makeSectionLabel(VisualsPage, 0, "— ESP")
+
+local subChams, subHealth, subSkeleton
+
+UI.makeToggleRow(VisualsPage, 0, "ESP  (Names + Boxes)", false, function(state)
+    ESP:SetEnabled(state)
+    subChams.Visible    = state
+    subHealth.Visible   = state
+    subSkeleton.Visible = state
+end)
+
+subChams    = UI.makeSubToggleRow(VisualsPage, 0, "Chams",        false, function(s) ESP:SetChams(s)     end)
+subHealth   = UI.makeSubToggleRow(VisualsPage, 0, "Health Bars",  false, function(s) ESP.HealthBars = s  end)
+subSkeleton = UI.makeSubToggleRow(VisualsPage, 0, "Skeleton ESP", false, function(s) ESP:SetSkeleton(s)  end)
+
+UI.makeSectionLabel(VisualsPage, 0, "— World")
+UI.makeToggleRow(VisualsPage, 0, "Fullbright", false, function(state)
+    Fullbright:SetEnabled(state)
+end)
+
+-- ══════════════════════════════════════════
+-- COMBAT PAGE
+-- ══════════════════════════════════════════
+local CombatPage = UI.makePage("Combat")
+UI.makePageTitle(CombatPage, "Combat")
+
+UI.makeToggleRow(CombatPage, 0, "Aimbot", false, function(state)
+    Aimbot:SetEnabled(state)
+end)
+UI.makeToggleRow(CombatPage, 0, "Check Walls", true, function(state)
+    Aimbot.WallCheck = state
+end)
+UI.makeSliderRow(CombatPage, 0, "FOV Radius (px)", 50, 400, 150, function(val)
+    Aimbot.FOV = val
+    local c = Aimbot:GetOverlayCircle(); if c then c.Radius = val end
+end)
+UI.makeSliderRow(CombatPage, 0, "Smoothness", 1, 20, 3, function(val)
+    Aimbot.Smooth = val
+end)
+UI.makeDropdownRow(CombatPage, 0, "Target Bone", {
+    "Head", "HumanoidRootPart", "UpperTorso", "Torso", "RightUpperArm", "LeftUpperArm"
+}, 1, function(val)
+    Aimbot.TargetBone = val
+end)
+UI.makeSliderRow(CombatPage, 0, "Bullet Velocity (studs/s)", 1, 4625, 800, function(val)
+    Aimbot.BulletVelocity = val
+end)
+
+-- ══════════════════════════════════════════
+-- MOVEMENT PAGE
+-- ══════════════════════════════════════════
+local MovementPage = UI.makePage("Movement")
+UI.makePageTitle(MovementPage, "Teleport")
+
+local usernameInput = UI.makeInputRow(MovementPage, 0, "Target Username", "Enter username...")
+UI.makeSliderRow(MovementPage, 0, "Behind Offset (studs)", 1, 30, 15, function(val)
+    Teleport.BehindOffset = val
+end)
+
+local statusLbl = UI.makeStatusLabel(MovementPage)
+Teleport:OnStatusChange(function(msg, color)
+    statusLbl.Text       = "Status: " .. msg
+    statusLbl.TextColor3 = color
+end)
+
+local instantTPBtn = UI.makeActionBtn(MovementPage, 0, "⚡ One-Time Teleport")
+local startTPBtn   = UI.makeActionBtn(MovementPage, 0, "🔄 Start Loop Tracking")
+startTPBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+local stopTPBtn    = UI.makeActionBtn(MovementPage, 0, "Stop")
+stopTPBtn.BackgroundColor3 = Color3.new(0.18, 0.18, 0.18)
+stopTPBtn.TextColor3       = Color3.new(0.6, 0.6, 0.6)
+
+instantTPBtn.MouseButton1Click:Connect(function()
+    instantTPBtn.Text = "⏳ Teleporting..."
+    Teleport:Once(usernameInput.getValue(), function(success)
+        if not success then instantTPBtn.Text = "❌ Not Found" end
+        task.delay(1.5, function() instantTPBtn.Text = "⚡ One-Time Teleport" end)
     end)
-    
-    if not success or not content or content == "" then
-        warn("❌ Failed to download: " .. fileName)
-        return nil
-    end
-    
-    local func, err = loadstring(content)
-    if not func then
-        warn("❌ SYNTAX ERROR IN " .. fileName .. ": " .. tostring(err))
-        return nil
-    end
-    
-    local execSuccess, result = pcall(func)
-    if not execSuccess then
-        warn("❌ RUNTIME ERROR IN " .. fileName .. ": " .. tostring(result))
-        return nil
-    end
-    
-    print("✅ " .. fileName .. " loaded perfectly.")
-    return result
-end
+end)
 
-print("--- STARTING SYSTEM DIAGNOSTICS ---")
+startTPBtn.MouseButton1Click:Connect(function()
+    if Teleport.IsTracking then return end
+    Teleport:StartTracking(
+        usernameInput.getValue(),
+        function(_target)
+            startTPBtn.Text             = "🟢 Tracking..."
+            startTPBtn.BackgroundColor3 = Color3.fromRGB(40, 160, 40)
+            stopTPBtn.BackgroundColor3  = Color3.new(0, 0.835, 1)
+            stopTPBtn.TextColor3        = Color3.new(1, 1, 1)
+        end,
+        function()
+            startTPBtn.Text = "❌ Not Found"
+            task.delay(1.5, function()
+                startTPBtn.Text             = "🔄 Start Loop Tracking"
+                startTPBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+            end)
+        end
+    )
+end)
 
--- Split into pieces to bypass chat shortening completely
-local firstPart  = "https://"
-local secondPart = "raw.githubusercontent"
-local thirdPart  = ".com/"
+stopTPBtn.MouseButton1Click:Connect(function()
+    if not Teleport.IsTracking then return end
+    Teleport:StopTracking()
+    startTPBtn.Text             = "🔄 Start Loop Tracking"
+    startTPBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+    stopTPBtn.BackgroundColor3  = Color3.new(0.18, 0.18, 0.18)
+    stopTPBtn.TextColor3        = Color3.new(0.6, 0.6, 0.6)
+end)
 
-local base = firstPart .. secondPart .. thirdPart
-local path = "jaikinpicio-bot/ChrisM/refs/heads/main/"
-local fullURL = base .. path
+-- ══════════════════════════════════════════
+-- SIDEBAR + TAB SWITCHER
+-- ══════════════════════════════════════════
+local btnVisuals  = UI.makeSideBtn("Visuals",  0.126, "Visuals",  "6523858394")
+local btnCombat   = UI.makeSideBtn("Combat",   0.233, "Combat",   "13050670424")
+local btnMovement = UI.makeSideBtn("Movement", 0.34,  "Movement", "16181398272")
 
-local Aimbot     = safeLoadDirect(fullURL .. "Aimbot.lua", "Aimbot.lua")
-local ESP        = safeLoadDirect(fullURL .. "ESP.lua", "ESP.lua")
-local Fullbright = safeLoadDirect(fullURL .. "Fullbright.lua", "Fullbright.lua")
-local Teleport   = safeLoadDirect(fullURL .. "Teleport.lua", "Teleport.lua")
-local UI         = safeLoadDirect(fullURL .. "UI.lua", "UI.lua")
+local switchTo = UI.setupTabSwitcher(
+    { btnVisuals, btnCombat, btnMovement },
+    { Visuals = VisualsPage, Combat = CombatPage, Movement = MovementPage }
+)
+switchTo(btnVisuals)
 
-print("--- DIAGNOSTICS COMPLETE ---")
+UI.setupDrag()
+UI.setupWindowControls(function()
+    Aimbot:Destroy()
+    ESP:Destroy()
+    if Fullbright.Enabled then Fullbright:Remove() end
+    if Teleport.IsTracking then Teleport:StopTracking() end
+end)
 
--- Execute Mounting
-if type(UI) == "table" and UI.mount then 
-    UI.mount() 
-end
+UI.mount()
