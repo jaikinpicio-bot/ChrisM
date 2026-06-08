@@ -3,11 +3,11 @@
 -- =====================
 local task = task
 
-local Aimbot     = require(script.Parent.Modules.Aimbot)
-local ESP        = require(script.Parent.Modules.ESP)
-local Fullbright = require(script.Parent.Modules.Fullbright)
-local Teleport   = require(script.Parent.Modules.Teleport)
-local UI         = require(script.Parent.Modules.UI)
+local Aimbot     = require(script.Parent.Aimbot)
+local ESP        = require(script.Parent.ESP)
+local Fullbright = require(script.Parent.Fullbright)
+local Teleport   = require(script.Parent.Teleport)
+local UI         = require(script.Parent.UI)
 
 Aimbot:Init()
 ESP:Init()
