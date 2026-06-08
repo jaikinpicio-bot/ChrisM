@@ -1,10 +1,6 @@
 -- =====================
 -- MODULE: UI
 -- =====================
--- Builds the ScreenGui and exposes widget factories.
--- Does NOT reference Aimbot/ESP/etc. directly — wiring is
--- done in Main.lua via the callbacks passed to each row.
--- =====================
 local TweenService     = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local Players          = game:GetService("Players")
@@ -31,9 +27,9 @@ local FONT_BOLD = Font.new(
 
 -- ── Root GUI ───────────────────────────────────────────────
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name          = "ChrisMHubGui"
+ScreenGui.Name           = "ChrisMHubGui"
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-ScreenGui.ResetOnSpawn  = false
+ScreenGui.ResetOnSpawn   = false
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Name             = "MainFrame"
@@ -44,7 +40,6 @@ MainFrame.Size             = UDim2.new(0, 675, 0, 486)
 MainFrame.Parent           = ScreenGui
 Instance.new("UICorner").Parent = MainFrame
 
--- Title
 local titleLbl = Instance.new("TextLabel")
 titleLbl.BackgroundTransparency = 1
 titleLbl.BorderSizePixel        = 0
@@ -75,36 +70,34 @@ Indicator.Size             = UDim2.new(0, 4, 0, 20)
 Indicator.Parent           = MainFrame
 
 local MinBtn = Instance.new("ImageButton")
-MinBtn.Name                = "MinBtn"
 MinBtn.BackgroundTransparency = 1
-MinBtn.BorderSizePixel     = 0
-MinBtn.Image               = "rbxassetid://82235228007110"
-MinBtn.Position            = UDim2.new(0.92, 0, 0.002, 0)
-MinBtn.Size                = UDim2.new(0, 22, 0, 22)
-MinBtn.Parent              = MainFrame
+MinBtn.BorderSizePixel        = 0
+MinBtn.Image                  = "rbxassetid://82235228007110"
+MinBtn.Position               = UDim2.new(0.92, 0, 0.002, 0)
+MinBtn.Size                   = UDim2.new(0, 22, 0, 22)
+MinBtn.Parent                 = MainFrame
 
 local CloseBtn = Instance.new("ImageButton")
-CloseBtn.Name              = "CloseBtn"
 CloseBtn.BackgroundTransparency = 1
-CloseBtn.BorderSizePixel   = 0
-CloseBtn.Image             = "rbxassetid://109757326745560"
-CloseBtn.Position          = UDim2.new(0.966, 0, 0.014, 0)
-CloseBtn.Size              = UDim2.new(0, 11, 0, 11)
-CloseBtn.Parent            = MainFrame
+CloseBtn.BorderSizePixel        = 0
+CloseBtn.Image                  = "rbxassetid://109757326745560"
+CloseBtn.Position               = UDim2.new(0.966, 0, 0.014, 0)
+CloseBtn.Size                   = UDim2.new(0, 11, 0, 11)
+CloseBtn.Parent                 = MainFrame
 
 local PageFolder = Instance.new("Folder")
 PageFolder.Parent = MainFrame
 
--- ── Widget factories ───────────────────────────────────────
+-- ── Pill toggle ────────────────────────────────────────────
 function UI.makePill(parent, defaultState)
     local pill = Instance.new("Frame")
-    pill.Size              = UDim2.new(0, PILL_W, 0, PILL_H)
-    pill.AnchorPoint       = Vector2.new(1, 0.5)
-    pill.Position          = UDim2.new(1, -12, 0.5, 0)
-    pill.BackgroundColor3  = defaultState and Color3.fromRGB(0, 200, 80) or Color3.fromRGB(76, 76, 76)
-    pill.BorderSizePixel   = 0
-    pill.ClipsDescendants  = true
-    pill.Parent            = parent
+    pill.Size             = UDim2.new(0, PILL_W, 0, PILL_H)
+    pill.AnchorPoint      = Vector2.new(1, 0.5)
+    pill.Position         = UDim2.new(1, -12, 0.5, 0)
+    pill.BackgroundColor3 = defaultState and Color3.fromRGB(0, 200, 80) or Color3.fromRGB(76, 76, 76)
+    pill.BorderSizePixel  = 0
+    pill.ClipsDescendants = true
+    pill.Parent           = parent
     local pc = Instance.new("UICorner"); pc.CornerRadius = UDim.new(1, 0); pc.Parent = pill
 
     local knob = Instance.new("Frame")
@@ -133,35 +126,103 @@ function UI.animatePill(pill, knob, state)
     }):Play()
 end
 
-function UI.makeSectionLabel(parent, yOffset, text)
+-- ── Page frame + auto-layout ───────────────────────────────
+-- Pages use a scrolling frame with UIListLayout so rows stack
+-- automatically — no hardcoded yOffsets needed in Main.lua.
+
+function UI.makePage(name)
+    local page = Instance.new("Frame")
+    page.Name             = name
+    page.BackgroundColor3 = Color3.new(0.098, 0.098, 0.098)
+    page.BorderSizePixel  = 0
+    page.Position         = UDim2.new(0.31, 0, 0.126, 0)
+    page.Size             = UDim2.new(0, 466, 0, 425)
+    page.Visible          = false
+    page.ClipsDescendants = true
+    page.Parent           = PageFolder
+    Instance.new("UICorner").Parent = page
+
+    -- Inner scroll frame so content can overflow without clipping dropdowns weirdly
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.Name                    = "Scroll"
+    scroll.BackgroundTransparency  = 1
+    scroll.BorderSizePixel         = 0
+    scroll.Position                = UDim2.new(0, 0, 0, 48)   -- leave room for page title
+    scroll.Size                    = UDim2.new(1, 0, 1, -48)
+    scroll.CanvasSize              = UDim2.new(0, 0, 0, 0)
+    scroll.AutomaticCanvasSize     = Enum.AutomaticSize.Y
+    scroll.ScrollBarThickness      = 0
+    scroll.ScrollingDirection      = Enum.ScrollingDirection.Y
+    scroll.ClipsDescendants        = true
+    scroll.Parent                  = page
+
+    local layout = Instance.new("UIListLayout")
+    layout.SortOrder     = Enum.SortOrder.LayoutOrder
+    layout.Padding       = UDim.new(0, 6)
+    layout.Parent        = scroll
+
+    local pad = Instance.new("UIPadding")
+    pad.PaddingLeft   = UDim.new(0, 28)
+    pad.PaddingRight  = UDim.new(0, 28)
+    pad.PaddingTop    = UDim.new(0, 4)
+    pad.PaddingBottom = UDim.new(0, 12)
+    pad.Parent        = scroll
+
+    return page
+end
+
+-- Helper: get the scroll frame from a page
+local function getScroll(page)
+    return page:FindFirstChild("Scroll")
+end
+
+function UI.makePageTitle(page, text)
     local lbl = Instance.new("TextLabel")
     lbl.BackgroundTransparency = 1
     lbl.BorderSizePixel        = 0
-    lbl.Position               = UDim2.new(0.06, 0, 0, yOffset)
-    lbl.Size                   = UDim2.new(0, 420, 0, 20)
+    lbl.FontFace               = FONT_BOLD
+    lbl.Position               = UDim2.new(0, 25, 0, 10)
+    lbl.Size                   = UDim2.new(0.88, 0, 0, 32)
+    lbl.Text                   = text
+    lbl.TextColor3             = Color3.new(1, 1, 1)
+    lbl.TextSize               = 20
+    lbl.TextXAlignment         = Enum.TextXAlignment.Left
+    lbl.Parent                 = page   -- sits above the scroll area
+end
+
+-- ── Section label ──────────────────────────────────────────
+function UI.makeSectionLabel(page, _, text)   -- yOffset ignored; layout handles it
+    local scroll = getScroll(page)
+    local lbl = Instance.new("TextLabel")
+    lbl.BackgroundTransparency = 1
+    lbl.BorderSizePixel        = 0
+    lbl.Size                   = UDim2.new(1, 0, 0, 20)
     lbl.Text                   = text
     lbl.TextColor3             = Color3.fromRGB(0, 213, 255)
     lbl.TextSize               = 11
     lbl.TextXAlignment         = Enum.TextXAlignment.Left
     lbl.FontFace               = FONT_BOLD
-    lbl.Parent                 = parent
+    lbl.LayoutOrder            = 0   -- caller should set this; default works for now
+    lbl.Parent                 = scroll
+    return lbl
 end
 
--- Toggle row with pill. onToggle(state: bool)
-function UI.makeToggleRow(parent, yOffset, labelText, defaultState, onToggle)
+-- ── Toggle row ─────────────────────────────────────────────
+function UI.makeToggleRow(page, _, labelText, defaultState, onToggle)
+    local scroll = getScroll(page)
+
     local row = Instance.new("Frame")
     row.BackgroundColor3 = Color3.new(0.157, 0.157, 0.157)
     row.BorderSizePixel  = 0
-    row.Position         = UDim2.new(0.06, 0, 0, yOffset)
-    row.Size             = UDim2.new(0, 420, 0, 36)
-    row.Parent           = parent
+    row.Size             = UDim2.new(1, 0, 0, 36)
+    row.Parent           = scroll
     Instance.new("UICorner").Parent = row
 
     local lbl = Instance.new("TextLabel")
     lbl.BackgroundTransparency = 1
     lbl.BorderSizePixel        = 0
     lbl.Position               = UDim2.new(0.02, 0, 0, 0)
-    lbl.Size                   = UDim2.new(0.7, 0, 1, 0)
+    lbl.Size                   = UDim2.new(0.75, 0, 1, 0)
     lbl.Text                   = labelText
     lbl.TextColor3             = Color3.new(1, 1, 1)
     lbl.TextSize               = 13
@@ -183,16 +244,20 @@ function UI.makeToggleRow(parent, yOffset, labelText, defaultState, onToggle)
     return row
 end
 
--- Indented sub-toggle with accent bar
-function UI.makeSubToggleRow(parent, yOffset, labelText, defaultState, onToggle)
+-- ── Sub-toggle row ─────────────────────────────────────────
+-- Returns the row so caller can show/hide it.
+function UI.makeSubToggleRow(page, _, labelText, defaultState, onToggle)
+    local scroll = getScroll(page)
+
     local row = Instance.new("Frame")
     row.BackgroundColor3 = Color3.new(0.13, 0.13, 0.13)
     row.BorderSizePixel  = 0
-    row.Position         = UDim2.new(0.06, 22, 0, yOffset)
-    row.Size             = UDim2.new(0, 398, 0, 32)
-    row.Parent           = parent
+    row.Size             = UDim2.new(1, 0, 0, 32)
+    row.Visible          = false    -- hidden by default; parent toggle shows it
+    row.Parent           = scroll
     Instance.new("UICorner").Parent = row
 
+    -- Left accent bar
     local bar = Instance.new("Frame")
     bar.BackgroundColor3 = Color3.new(0, 0.835, 1)
     bar.BorderSizePixel  = 0
@@ -203,8 +268,8 @@ function UI.makeSubToggleRow(parent, yOffset, labelText, defaultState, onToggle)
     local lbl = Instance.new("TextLabel")
     lbl.BackgroundTransparency = 1
     lbl.BorderSizePixel        = 0
-    lbl.Position               = UDim2.new(0, 10, 0, 0)
-    lbl.Size                   = UDim2.new(0.65, 0, 1, 0)
+    lbl.Position               = UDim2.new(0, 12, 0, 0)
+    lbl.Size                   = UDim2.new(0.7, 0, 1, 0)
     lbl.Text                   = labelText
     lbl.TextColor3             = Color3.fromRGB(180, 180, 180)
     lbl.TextSize               = 12
@@ -226,91 +291,121 @@ function UI.makeSubToggleRow(parent, yOffset, labelText, defaultState, onToggle)
     return row
 end
 
--- Dropdown row. onChange(selectedString)
-function UI.makeDropdownRow(parent, yOffset, labelText, options, defaultIndex, onChange)
-    local row = Instance.new("Frame")
-    row.BackgroundColor3  = Color3.new(0.157, 0.157, 0.157)
-    row.BorderSizePixel   = 0
-    row.Position          = UDim2.new(0.06, 0, 0, yOffset)
-    row.Size              = UDim2.new(0, 420, 0, 36)
-    row.ClipsDescendants  = false
-    row.Parent            = parent
-    Instance.new("UICorner").Parent = row
+-- ── Dropdown row (animated expand below the row) ───────────
+-- The list expands the container's height and the UIListLayout
+-- pushes all subsequent rows down automatically.
+function UI.makeDropdownRow(page, _, labelText, options, defaultIndex, onChange)
+    local scroll = getScroll(page)
+
+    local ITEM_H    = 28
+    local CLOSED_H  = 36
+    local OPEN_H    = CLOSED_H + #options * ITEM_H + 4
+    local TWEEN_IN  = TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+    local TWEEN_OUT = TweenInfo.new(0.15, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
+
+    -- Outer container whose height grows/shrinks
+    local container = Instance.new("Frame")
+    container.BackgroundColor3 = Color3.new(0.157, 0.157, 0.157)
+    container.BorderSizePixel  = 0
+    container.Size             = UDim2.new(1, 0, 0, CLOSED_H)
+    container.ClipsDescendants = true   -- clips the list while animating
+    container.Parent           = scroll
+    Instance.new("UICorner").Parent = container
+
+    -- Header row (always visible)
+    local header = Instance.new("Frame")
+    header.BackgroundTransparency = 1
+    header.BorderSizePixel        = 0
+    header.Position               = UDim2.new(0, 0, 0, 0)
+    header.Size                   = UDim2.new(1, 0, 0, CLOSED_H)
+    header.Parent                 = container
 
     local lbl = Instance.new("TextLabel")
     lbl.BackgroundTransparency = 1
     lbl.BorderSizePixel        = 0
     lbl.Position               = UDim2.new(0.02, 0, 0, 0)
-    lbl.Size                   = UDim2.new(0.5, 0, 1, 0)
+    lbl.Size                   = UDim2.new(0.55, 0, 1, 0)
     lbl.Text                   = labelText
     lbl.TextColor3             = Color3.new(1, 1, 1)
     lbl.TextSize               = 13
     lbl.TextXAlignment         = Enum.TextXAlignment.Left
     lbl.FontFace               = FONT_REGULAR
-    lbl.Parent                 = row
+    lbl.Parent                 = header
 
     local selected = defaultIndex or 1
     local open     = false
 
     local selBtn = Instance.new("TextButton")
-    selBtn.AnchorPoint       = Vector2.new(1, 0.5)
-    selBtn.Position          = UDim2.new(1, -8, 0.5, 0)
-    selBtn.Size              = UDim2.new(0, 140, 0, 24)
-    selBtn.BackgroundColor3  = Color3.new(0.22, 0.22, 0.22)
-    selBtn.BorderSizePixel   = 0
-    selBtn.Text              = options[selected] .. "  ▾"
-    selBtn.TextColor3        = Color3.new(0, 0.835, 1)
-    selBtn.TextSize          = 12
-    selBtn.FontFace          = FONT_REGULAR
-    selBtn.ZIndex            = 5
-    selBtn.Parent            = row
+    selBtn.AnchorPoint      = Vector2.new(1, 0.5)
+    selBtn.Position         = UDim2.new(1, -10, 0.5, 0)
+    selBtn.Size             = UDim2.new(0, 140, 0, 24)
+    selBtn.BackgroundColor3 = Color3.new(0.22, 0.22, 0.22)
+    selBtn.BorderSizePixel  = 0
+    selBtn.Text             = options[selected] .. "  ▾"
+    selBtn.TextColor3       = Color3.new(0, 0.835, 1)
+    selBtn.TextSize         = 12
+    selBtn.FontFace         = FONT_REGULAR
+    selBtn.ZIndex           = 2
+    selBtn.Parent           = header
     Instance.new("UICorner").Parent = selBtn
 
+    -- List panel (sits below the header inside container)
     local listFrame = Instance.new("Frame")
-    listFrame.BackgroundColor3 = Color3.new(0.18, 0.18, 0.18)
+    listFrame.BackgroundColor3 = Color3.new(0.14, 0.14, 0.14)
     listFrame.BorderSizePixel  = 0
-    listFrame.Position         = UDim2.new(1, -148, 1, 4)
-    listFrame.Size             = UDim2.new(0, 140, 0, #options * 26)
-    listFrame.Visible          = false
-    listFrame.ZIndex           = 10
-    listFrame.Parent           = row
+    listFrame.Position         = UDim2.new(0, 0, 0, CLOSED_H + 2)
+    listFrame.Size             = UDim2.new(1, 0, 0, #options * ITEM_H)
+    listFrame.ZIndex           = 3
+    listFrame.Parent           = container
     Instance.new("UICorner").Parent = listFrame
 
     for i, opt in ipairs(options) do
         local optBtn = Instance.new("TextButton")
         optBtn.BackgroundTransparency = 1
         optBtn.BorderSizePixel        = 0
-        optBtn.Position               = UDim2.new(0, 0, 0, (i - 1) * 26)
-        optBtn.Size                   = UDim2.new(1, 0, 0, 26)
+        optBtn.Position               = UDim2.new(0, 12, 0, (i - 1) * ITEM_H)
+        optBtn.Size                   = UDim2.new(1, -12, 0, ITEM_H)
         optBtn.Text                   = opt
-        optBtn.TextColor3             = Color3.new(0.85, 0.85, 0.85)
+        optBtn.TextColor3             = Color3.new(0.75, 0.75, 0.75)
+        optBtn.TextXAlignment         = Enum.TextXAlignment.Left
         optBtn.TextSize               = 12
-        optBtn.ZIndex                 = 11
+        optBtn.ZIndex                 = 4
         optBtn.FontFace               = FONT_REGULAR
         optBtn.Parent                 = listFrame
 
         optBtn.MouseButton1Click:Connect(function()
-            selected = i
-            selBtn.Text   = options[i] .. "  ▾"
-            listFrame.Visible = false
-            open = false
+            selected       = i
+            selBtn.Text    = options[i] .. "  ▾"
+            open           = false
+            TweenService:Create(container, TWEEN_OUT, { Size = UDim2.new(1, 0, 0, CLOSED_H) }):Play()
             if onChange then onChange(options[i]) end
         end)
         optBtn.MouseEnter:Connect(function() optBtn.TextColor3 = Color3.new(0, 0.835, 1) end)
-        optBtn.MouseLeave:Connect(function() optBtn.TextColor3 = Color3.new(0.85, 0.85, 0.85) end)
+        optBtn.MouseLeave:Connect(function() optBtn.TextColor3 = Color3.new(0.75, 0.75, 0.75) end)
     end
 
-    selBtn.MouseButton1Click:Connect(function() open = not open; listFrame.Visible = open end)
+    -- Animate open/close by tweening the container height
+    selBtn.MouseButton1Click:Connect(function()
+        open = not open
+        local targetH = open and OPEN_H or CLOSED_H
+        local info    = open and TWEEN_IN or TWEEN_OUT
+        TweenService:Create(container, info, { Size = UDim2.new(1, 0, 0, targetH) }):Play()
+        -- Rotate arrow
+        selBtn.Text = options[selected] .. (open and "  ▴" or "  ▾")
+    end)
+
+    return container
 end
 
--- Text input row. Returns { getValue() }
-function UI.makeInputRow(parent, yOffset, labelText, placeholder)
+-- ── Input row ──────────────────────────────────────────────
+function UI.makeInputRow(page, _, labelText, placeholder)
+    local scroll = getScroll(page)
+
     local row = Instance.new("Frame")
     row.BackgroundColor3 = Color3.new(0.157, 0.157, 0.157)
     row.BorderSizePixel  = 0
-    row.Position         = UDim2.new(0.06, 0, 0, yOffset)
-    row.Size             = UDim2.new(0, 420, 0, 40)
-    row.Parent           = parent
+    row.Size             = UDim2.new(1, 0, 0, 40)
+    row.Parent           = scroll
     Instance.new("UICorner").Parent = row
 
     local lbl = Instance.new("TextLabel")
@@ -326,31 +421,32 @@ function UI.makeInputRow(parent, yOffset, labelText, placeholder)
     lbl.Parent                 = row
 
     local box = Instance.new("TextBox")
-    box.BackgroundColor3   = Color3.new(0.22, 0.22, 0.22)
-    box.BorderSizePixel    = 0
-    box.Position           = UDim2.new(0.4, 0, 0.15, 0)
-    box.Size               = UDim2.new(0.58, 0, 0.7, 0)
-    box.Text               = ""
-    box.PlaceholderText    = placeholder
-    box.PlaceholderColor3  = Color3.new(0.45, 0.45, 0.45)
-    box.TextColor3         = Color3.new(0, 0.835, 1)
-    box.TextSize           = 12
-    box.ClearTextOnFocus   = false
-    box.FontFace           = FONT_REGULAR
-    box.Parent             = row
+    box.BackgroundColor3  = Color3.new(0.22, 0.22, 0.22)
+    box.BorderSizePixel   = 0
+    box.Position          = UDim2.new(0.4, 0, 0.15, 0)
+    box.Size              = UDim2.new(0.58, 0, 0.7, 0)
+    box.Text              = ""
+    box.PlaceholderText   = placeholder
+    box.PlaceholderColor3 = Color3.new(0.45, 0.45, 0.45)
+    box.TextColor3        = Color3.new(0, 0.835, 1)
+    box.TextSize          = 12
+    box.ClearTextOnFocus  = false
+    box.FontFace          = FONT_REGULAR
+    box.Parent            = row
     Instance.new("UICorner").Parent = box
 
     return { Row = row, getValue = function() return box.Text end }
 end
 
--- Slider row. Returns { getValue() }; onChange(value: number)
-function UI.makeSliderRow(parent, yOffset, labelText, minVal, maxVal, defaultVal, onChange)
+-- ── Slider row ─────────────────────────────────────────────
+function UI.makeSliderRow(page, _, labelText, minVal, maxVal, defaultVal, onChange)
+    local scroll = getScroll(page)
+
     local row = Instance.new("Frame")
     row.BackgroundColor3 = Color3.new(0.157, 0.157, 0.157)
     row.BorderSizePixel  = 0
-    row.Position         = UDim2.new(0.06, 0, 0, yOffset)
-    row.Size             = UDim2.new(0, 420, 0, 50)
-    row.Parent           = parent
+    row.Size             = UDim2.new(1, 0, 0, 50)
+    row.Parent           = scroll
     Instance.new("UICorner").Parent = row
 
     local lbl = Instance.new("TextLabel")
@@ -410,16 +506,17 @@ function UI.makeSliderRow(parent, yOffset, labelText, minVal, maxVal, defaultVal
             (inputX - trackBg.AbsolutePosition.X) / trackBg.AbsoluteSize.X,
             0, 1
         )
-        currentValue         = math.floor(minVal + pct * (maxVal - minVal))
-        trackFill.Size       = UDim2.new(pct, 0, 1, 0)
-        knob.Position        = UDim2.new(pct, 0, 0.5, 0)
-        valLbl.Text          = tostring(currentValue)
+        currentValue   = math.floor(minVal + pct * (maxVal - minVal))
+        trackFill.Size = UDim2.new(pct, 0, 1, 0)
+        knob.Position  = UDim2.new(pct, 0, 0.5, 0)
+        valLbl.Text    = tostring(currentValue)
         if onChange then onChange(currentValue) end
     end
 
     trackBg.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true; updateSlider(input.Position.X)
+            dragging = true
+            updateSlider(input.Position.X)
         end
     end)
     UserInputService.InputChanged:Connect(function(input)
@@ -434,23 +531,40 @@ function UI.makeSliderRow(parent, yOffset, labelText, minVal, maxVal, defaultVal
     return { Row = row, getValue = function() return currentValue end }
 end
 
--- Action button
-function UI.makeActionBtn(parent, yOffset, labelText)
+-- ── Action button ──────────────────────────────────────────
+function UI.makeActionBtn(page, _, labelText)
+    local scroll = getScroll(page)
+
     local btn = Instance.new("TextButton")
     btn.BackgroundColor3 = Color3.new(0, 0.835, 1)
     btn.BorderSizePixel  = 0
-    btn.Position         = UDim2.new(0.06, 0, 0, yOffset)
-    btn.Size             = UDim2.new(0, 420, 0, 36)
+    btn.Size             = UDim2.new(1, 0, 0, 36)
     btn.Text             = labelText
     btn.TextColor3       = Color3.new(1, 1, 1)
     btn.TextSize         = 13
     btn.FontFace         = FONT_BOLD
-    btn.Parent           = parent
+    btn.Parent           = scroll
     Instance.new("UICorner").Parent = btn
     return btn
 end
 
--- Sidebar nav button
+-- ── Status label (plain, no background) ───────────────────
+function UI.makeStatusLabel(page)
+    local scroll = getScroll(page)
+    local lbl = Instance.new("TextLabel")
+    lbl.BackgroundTransparency = 1
+    lbl.BorderSizePixel        = 0
+    lbl.Size                   = UDim2.new(1, 0, 0, 22)
+    lbl.Text                   = "Status: Idle"
+    lbl.TextColor3             = Color3.new(0.5, 0.5, 0.5)
+    lbl.TextSize               = 12
+    lbl.TextXAlignment         = Enum.TextXAlignment.Left
+    lbl.FontFace               = FONT_REGULAR
+    lbl.Parent                 = scroll
+    return lbl
+end
+
+-- ── Sidebar nav button ─────────────────────────────────────
 function UI.makeSideBtn(name, yScale, text, iconId)
     local btn = Instance.new("TextButton")
     btn.Name             = name
@@ -483,35 +597,6 @@ function UI.makeSideBtn(name, yScale, text, iconId)
     return btn
 end
 
--- Page frame
-function UI.makePage(name)
-    local page = Instance.new("Frame")
-    page.Name             = name
-    page.BackgroundColor3 = Color3.new(0.098, 0.098, 0.098)
-    page.BorderSizePixel  = 0
-    page.Position         = UDim2.new(0.31, 0, 0.126, 0)
-    page.Size             = UDim2.new(0, 466, 0, 425)
-    page.Visible          = false
-    page.Parent           = PageFolder
-    Instance.new("UICorner").Parent = page
-    return page
-end
-
--- Page title label
-function UI.makePageTitle(page, text)
-    local lbl = Instance.new("TextLabel")
-    lbl.BackgroundTransparency = 1
-    lbl.BorderSizePixel        = 0
-    lbl.FontFace               = FONT_BOLD
-    lbl.Position               = UDim2.new(0, 25, 0, 10)
-    lbl.Size                   = UDim2.new(0.88, 0, 0, 32)
-    lbl.Text                   = text
-    lbl.TextColor3             = Color3.new(1, 1, 1)
-    lbl.TextSize               = 20
-    lbl.TextXAlignment         = Enum.TextXAlignment.Left
-    lbl.Parent                 = page
-end
-
 -- ── Tab switcher ───────────────────────────────────────────
 function UI.setupTabSwitcher(buttons, pages)
     local TWEEN = TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
@@ -531,7 +616,7 @@ function UI.setupTabSwitcher(buttons, pages)
             local sel = (btn == selectedBtn)
             TweenService:Create(btn, TWEEN, {
                 BackgroundTransparency = sel and 0.88 or 1,
-                TextTransparency       = sel and 0 or 0.4,
+                TextTransparency       = sel and 0   or 0.4,
             }):Play()
             local icon = btn:FindFirstChildOfClass("ImageLabel")
             if icon then
@@ -580,7 +665,6 @@ function UI.setupDrag()
 end
 
 -- ── Window controls ────────────────────────────────────────
--- onClose: called before the GUI is destroyed so Main can clean up modules
 function UI.setupWindowControls(onClose)
     CloseBtn.MouseButton1Click:Connect(function()
         if onClose then onClose() end
@@ -600,7 +684,7 @@ function UI.setupWindowControls(onClose)
     end)
 end
 
--- ── Mount ─────────────────────────────────────────────────
+-- ── Mount ──────────────────────────────────────────────────
 function UI.mount()
     ScreenGui.Parent = PlayerGui
 end
