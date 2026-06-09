@@ -1,7 +1,7 @@
 -- =====================
 -- MAIN: ChrisM Hub
 -- =====================
-local BASE = "https://raw.githubusercontent.com/jaikinpicio-bot/ChrisM/main/"
+local BASE = "https://raw.githubusercontent.com/SadManic/ChrisM/main/"
 
 local function load(path)
     print("⏳ Loading: " .. path)
