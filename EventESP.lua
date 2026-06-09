@@ -4,41 +4,37 @@
 local Workspace         = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players           = game:GetService("Players")
-
-local LocalPlayer = Players.LocalPlayer
+local LocalPlayer       = Players.LocalPlayer
 
 local EventESP = {}
 
--- ── Config ─────────────────────────────────────────────────
 EventESP.Enabled     = false
-EventESP.MaxDistance = 1000  -- slider controlled
+EventESP.MaxDistance = 1000
 
 local EVENT_COLOR = Color3.fromRGB(185, 0, 255)
 
--- ── Registry ───────────────────────────────────────────────
+-- ── Registry (built synchronously at top level) ────────────
 local ActiveEventRegistry = {}
-
-local function buildRegistry()
-    local ok, folder = pcall(function()
-        return ReplicatedStorage:WaitForChild("Map", 5):WaitForChild("RandomEvents", 5)
-    end)
-    if not ok or not folder then
-        warn("EventESP: Could not find ReplicatedStorage.Map.RandomEvents")
-        return
-    end
-    for _, template in ipairs(folder:GetChildren()) do
+local ok, eventsFolder = pcall(function()
+    return ReplicatedStorage:WaitForChild("Map", 5):WaitForChild("RandomEvents", 5)
+end)
+if ok and eventsFolder then
+    for _, template in ipairs(eventsFolder:GetChildren()) do
         ActiveEventRegistry[template.Name:lower()] = true
     end
+    print("EventESP: Registry built with " .. tostring(#eventsFolder:GetChildren()) .. " events")
+else
+    warn("EventESP: Could not find ReplicatedStorage.Map.RandomEvents")
 end
 
 -- ── Apply / remove ─────────────────────────────────────────
 local function applyESP(model)
     if model:FindFirstChild("_EventESP") then return end
 
-    local anchor = model.PrimaryPart
+    local anchorPart = model.PrimaryPart
         or model:FindFirstChildWhichIsA("BasePart")
         or model:FindFirstChildWhichIsA("MeshPart")
-    if not anchor then return end
+    if not anchorPart then return end
 
     local hl = Instance.new("Highlight")
     hl.Name                = "_EventESP"
@@ -55,7 +51,7 @@ local function applyESP(model)
     bb.Size          = UDim2.new(0, 250, 0, 50)
     bb.AlwaysOnTop   = true
     bb.ExtentsOffset = Vector3.new(0, 5, 0)
-    bb.Adornee       = anchor
+    bb.Adornee       = anchorPart
     bb.Parent        = model
 
     local lbl = Instance.new("TextLabel")
@@ -68,27 +64,25 @@ local function applyESP(model)
     lbl.Parent                 = bb
 
     task.spawn(function()
-        while model and model.Parent and anchor and anchor.Parent do
+        while model and model.Parent and anchorPart and anchorPart.Parent do
             if not EventESP.Enabled then
                 hl.Enabled = false
                 bb.Enabled = false
                 task.wait(0.5)
-                continue
-            end
-
-            local myChar = LocalPlayer.Character
-            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-            if myRoot then
-                local dist = math.floor((myRoot.Position - anchor.Position).Magnitude)
-                -- Hide if beyond max distance
-                local inRange = dist <= EventESP.MaxDistance
-                hl.Enabled = inRange
-                bb.Enabled = inRange
-                if inRange then
-                    lbl.Text = "🚨 " .. model.Name:upper() .. " [" .. dist .. "m]"
+            else
+                local myChar = LocalPlayer.Character
+                local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                if myRoot then
+                    local dist    = math.floor((myRoot.Position - anchorPart.Position).Magnitude)
+                    local inRange = dist <= EventESP.MaxDistance
+                    hl.Enabled    = inRange
+                    bb.Enabled    = inRange
+                    if inRange then
+                        lbl.Text = "🚨 " .. model.Name:upper() .. " [" .. dist .. "m]"
+                    end
                 end
+                task.wait(0.5)
             end
-            task.wait(0.5)
         end
     end)
 end
@@ -111,8 +105,8 @@ end
 local function scanAll()
     for _, desc in ipairs(Workspace:GetDescendants()) do
         if desc:IsA("Model") then
-            if EventESP.Enabled then
-                evaluate(desc)
+            if EventESP.Enabled and ActiveEventRegistry[desc.Name:lower()] then
+                applyESP(desc)
             else
                 removeESP(desc)
             end
@@ -127,7 +121,6 @@ function EventESP:SetEnabled(state)
 end
 
 function EventESP:Init()
-    buildRegistry()
     scanAll()
 
     Workspace.DescendantAdded:Connect(function(desc)
