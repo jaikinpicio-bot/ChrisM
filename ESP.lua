@@ -17,6 +17,7 @@ ESP.Boxes       = true
 ESP.Names       = true
 ESP.WeaponText  = true
 ESP.Zombies     = false
+ESP.MaxDistance = 500
 
 local ESP_COLOR         = Color3.fromRGB(255, 0, 0)
 local OUTLINE_COLOR     = Color3.fromRGB(255, 255, 255)
@@ -118,7 +119,7 @@ local function renderFrame()
             local dist    = (camPos - root.Position).Magnitude
             local _, onSc = camera:WorldToViewportPoint(root.Position)
 
-            if onSc and dist > 0.1 then
+            if onSc and dist > 0.1 and dist <= ESP.MaxDistance then
                 table.insert(sorted, {
                     Player = player, Data = d,
                     Distance = dist, Character = character, Humanoid = humanoid
