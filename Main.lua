@@ -59,7 +59,7 @@ subNames    = UI.makeSubToggleRow(VisualsPage, 0, "Names",        true,  functio
 subWeapon   = UI.makeSubToggleRow(VisualsPage, 0, "Weapon Label", true,  function(s) ESP.WeaponText = s end)
 subZombies  = UI.makeSubToggleRow(VisualsPage, 0, "Zombies",      false, function(s) ESP:SetZombies(s)  end)
 
-UI.makeSliderRow(VisualsPage, 0, "Player ESP Distance (m)", 10, 1000, 500, function(val)
+UI.makeSliderRow(VisualsPage, 0, "Player ESP Distance (m)", 10, 5000, 500, function(val)
     ESP.MaxDistance = val
 end)
 
@@ -75,7 +75,7 @@ end)
 
 subAccessories = UI.makeSubToggleRow(VisualsPage, 0, "Accessories", true, function(s) ItemESP:SetAccessories(s) end)
 
-UI.makeSliderRow(VisualsPage, 0, "Item ESP Distance (m)", 50, 2000, 500, function(val)
+UI.makeSliderRow(VisualsPage, 0, "Item ESP Distance (m)", 50, 5000, 500, function(val)
     ItemESP.MaxDistance = val
 end)
 
