@@ -1,4 +1,3 @@
-
 -- =====================
 -- MODULE: UI
 -- =====================
@@ -693,3 +692,5 @@ end
 function UI.mount()
     ScreenGui.Parent = game:GetService("CoreGui")
 end
+
+return UI
