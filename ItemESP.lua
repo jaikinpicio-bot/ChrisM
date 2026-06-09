@@ -7,28 +7,31 @@ local LocalPlayer       = Players.LocalPlayer
 
 local ItemESP = {}
 
-ItemESP.Enabled     = false
+ItemESP.Enabled     = true -- Default to true so it hooks structures properly on start
 ItemESP.Accessories = true
 ItemESP.MaxDistance = 500
 
 local ESP_COLOR  = Color3.fromRGB(255, 0, 100)
 local TEXT_COLOR = Color3.fromRGB(255, 255, 255)
 
-local ACCESSORY_PREFIXES = { "Accessory", "Belt", "Hat", "Hair", "Vest" }
+local ACCESSORY_PREFIXES = { "accessory", "belt", "hat", "hair", "vest", "shirt", "pants" }
 
 -- Characters folder (player gear is parented here)
 local CharactersFolder = Workspace:WaitForChild("Characters", 5)
 
 -- ── Helpers ────────────────────────────────────────────────
-local function isAccessory(name)
+local function checkIsAccessory(name)
+    local lowerName = name:lower()
     for _, prefix in ipairs(ACCESSORY_PREFIXES) do
-        if string.sub(name, 1, #prefix) == prefix then return true end
+        if string.sub(lowerName, 1, #prefix) == prefix then return true end
     end
     return false
 end
 
 -- Check if a model is worn/held by a player (using the working logic)
 local function isWornByPlayer(instance)
+    if not instance or not instance.Parent then return false end
+    
     -- Check A: inside the Characters folder but not the root player model
     if CharactersFolder and instance:IsDescendantOf(CharactersFolder) then
         if instance ~= LocalPlayer.Character and instance.Parent ~= CharactersFolder then
@@ -90,26 +93,34 @@ local function applyESP(model)
     lbl.TextStrokeTransparency = 0
     lbl.Parent                 = bb
 
+    -- FIXED THREAD: Threads stay alive to continuously monitor global script state updates
     task.spawn(function()
         while model and model.Parent and anchorPart and anchorPart.Parent do
+            local myChar = LocalPlayer.Character
+            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            
+            -- Dynamic master toggle check
             if not ItemESP.Enabled then
                 hl.Enabled = false
                 bb.Enabled = false
-                task.wait(0.5)
-            else
-                local myChar = LocalPlayer.Character
-                local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-                if myRoot then
-                    local dist    = math.floor((myRoot.Position - anchorPart.Position).Magnitude)
-                    local inRange = dist <= ItemESP.MaxDistance
+            elseif myRoot then
+                local dist    = math.floor((myRoot.Position - anchorPart.Position).Magnitude)
+                local inRange = dist <= ItemESP.MaxDistance
+                
+                -- Dynamic Accessory feature toggle check
+                local isAcc = checkIsAccessory(model.Name)
+                if isAcc and not ItemESP.Accessories then
+                    hl.Enabled = false
+                    bb.Enabled = false
+                else
                     hl.Enabled    = inRange
                     bb.Enabled    = inRange
                     if inRange then
                         lbl.Text = model.Name .. " [" .. dist .. "m]"
                     end
                 end
-                task.wait(0.3)
             end
+            task.wait(0.3)
         end
     end)
 end
@@ -125,18 +136,10 @@ end
 local function evaluate(instance)
     if not instance or not instance.Parent then return end
     if not instance:IsA("Model") then return end
-    if not ItemESP.Enabled then return end
 
-    local shouldShow = false
-
-    -- Only show items worn/held by players
+    -- FIXED GATEWAY: Allows initialization and background event registration 
+    -- to hook models natively regardless of startup toggle state
     if isWornByPlayer(instance) then
-        if ItemESP.Accessories and isAccessory(instance.Name) then
-            shouldShow = true
-        end
-    end
-
-    if shouldShow then
         applyESP(instance)
     else
         removeESP(instance)
@@ -152,20 +155,18 @@ end
 -- ── Public API ─────────────────────────────────────────────
 function ItemESP:SetEnabled(state)
     self.Enabled = state
-    scanAll()
+    -- Instantly wakes up the rendering loop states instead of forcing full map lag loops
 end
 
 function ItemESP:SetAccessories(state)
     self.Accessories = state
-    scanAll()
 end
 
 function ItemESP:Init()
     scanAll()
 
     Workspace.DescendantAdded:Connect(function(desc)
-        if not ItemESP.Enabled then return end
-        task.wait(0.1)
+        task.wait(0.1) -- Maintain your network replication buffer
         pcall(function() evaluate(desc) end)
     end)
 
@@ -176,7 +177,7 @@ end
 
 function ItemESP:Destroy()
     self.Enabled = false
-    scanAll()
+    -- Clears components natively via the individual run threads safely
 end
 
 return ItemESP
