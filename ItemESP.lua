@@ -1,6 +1,6 @@
--- =====================================================================
--- MODULE: ItemESP (Fully Unlocked & Pre-Activated)
--- =====================================================================
+-- =====================
+-- MODULE: ItemESP
+-- =====================
 local Players           = game:GetService("Players")
 local Workspace         = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -28,6 +28,7 @@ local function isAccessory(name)
 end
 
 -- ── Zombie detection ───────────────────────────────────────
+-- Only models that are direct children of Workspace.Zombies
 local function isZombie(model)
     local zombieFolder = Workspace:FindFirstChild("Zombies")
     if not zombieFolder then return false end
@@ -38,22 +39,19 @@ end
 local TargetItems = {}
 
 local function buildRegistry()
-    -- Attempts to pull weapon data from default framework folders
     local ok, itemsFolder = pcall(function()
         return ReplicatedStorage:WaitForChild("Assets", 5):WaitForChild("Items", 5)
     end)
-    
     if not ok or not itemsFolder then
-        warn("ItemESP: Could not find ReplicatedStorage.Assets.Items - Mapping structural defaults")
+        warn("ItemESP: Could not find ReplicatedStorage.Assets.Items")
         return
     end
-    
     for _, item in ipairs(itemsFolder:GetChildren()) do
         TargetItems[item.Name:lower()] = true
     end
 end
 
--- ── Player char registry ───────────────────────────────────
+-- ── Player char registry (so we never tag player accessories) ──
 local playerChars = {}
 
 local function refreshPlayerChars()
@@ -72,18 +70,10 @@ local function isOwnedByPlayer(model)
     return false
 end
 
--- ── Should this model have ESP? (FIXED PROPERTY BYPASS) ─────
+-- ── Should this model have ESP? ────────────────────────────
 local function shouldESP(model)
     if not ItemESP.Enabled then return false end
-
-    -- FIX: If it's an item/weapon in the game files, highlight it FIRST
-    -- This ensures guns in your hands, backpack, or on characters light up!
-    if TargetItems[model.Name:lower()] or model:IsA("Tool") then
-        return true
-    end
-
-    -- If it's a generic map structure or accessory, prevent cluttering player bodies
-    if isOwnedByPlayer(model) then return false end
+    if isOwnedByPlayer(model) then return false end  -- never tag player-worn items
 
     if isZombie(model) then
         return ItemESP.Zombies
@@ -93,6 +83,10 @@ local function shouldESP(model)
         return ItemESP.Accessories
     end
 
+    if TargetItems[model.Name:lower()] then
+        return true
+    end
+
     return false
 end
 
@@ -100,9 +94,7 @@ end
 local function applyESP(model)
     if model:FindFirstChild("_ItemESP") then return end
 
-    -- Target physical handles or meshes for inventory item tracking
-    local anchor = model:FindFirstChild("Handle")
-        or model:FindFirstChild("Base")
+    local anchor = model:FindFirstChild("Base")
         or model:FindFirstChildWhichIsA("MeshPart")
         or model:FindFirstChildWhichIsA("BasePart")
     if not anchor then return end
@@ -165,29 +157,18 @@ local function removeESP(model)
     if bb then bb:Destroy() end
 end
 
--- ── Re-evaluate all existing models (Lag-Proof Fix) ───
+-- ── Re-evaluate all existing models ───────────────────────
 local function scanAll()
     refreshPlayerChars()
-    
-    task.spawn(function()
-        local count = 0
-        for _, desc in ipairs(Workspace:GetDescendants()) do
-            if desc:IsA("Model") or desc:IsA("Tool") then
-                count = count + 1
-                
-                -- Staggers the scan loop to ensure Xeno does not hit execution timeouts
-                if count % 150 == 0 then
-                    task.wait()
-                end
-                
-                if shouldESP(desc) then
-                    applyESP(desc)
-                else
-                    removeESP(desc)
-                end
+    for _, desc in ipairs(Workspace:GetDescendants()) do
+        if desc:IsA("Model") then
+            if shouldESP(desc) then
+                applyESP(desc)
+            else
+                removeESP(desc)
             end
         end
-    end)
+    end
 end
 
 -- ── Public API ─────────────────────────────────────────────
@@ -210,32 +191,25 @@ function ItemESP:Init()
     buildRegistry()
 
     -- Track player characters
-    local function hookCharacter(p)
+    Players.PlayerAdded:Connect(function(p)
         p.CharacterAdded:Connect(function(c)
             playerChars[c] = true
-            scanAll()
         end)
-    end
-
-    Players.PlayerAdded:Connect(function(p)
-        hookCharacter(p)
     end)
-    
     Players.PlayerRemoving:Connect(function(p)
         if p.Character then playerChars[p.Character] = nil end
     end)
-    
     for _, p in ipairs(Players:GetPlayers()) do
-        hookCharacter(p)
+        p.CharacterAdded:Connect(function(c) playerChars[c] = true end)
         if p.Character then playerChars[p.Character] = true end
     end
 
     scanAll()
 
-    -- Watch for newly streamed-in models or tools equipped
+    -- Watch for newly streamed-in models
     Workspace.DescendantAdded:Connect(function(desc)
         if not ItemESP.Enabled then return end
-        if not (desc:IsA("Model") or desc:IsA("Tool")) then return end
+        if not desc:IsA("Model") then return end
         task.wait(0.1)
         refreshPlayerChars()
         if shouldESP(desc) then applyESP(desc) end
@@ -243,7 +217,7 @@ function ItemESP:Init()
 
     -- Clean up when models are removed
     Workspace.DescendantRemoving:Connect(function(desc)
-        if desc:IsA("Model") or desc:IsA("Tool") then
+        if desc:IsA("Model") then
             removeESP(desc)
         end
     end)
@@ -253,9 +227,5 @@ function ItemESP:Destroy()
     self.Enabled = false
     scanAll()
 end
-
--- ── AUTOMATIC ACTIVATION ────────────────────────────────────
-ItemESP:Init()
-ItemESP:SetEnabled(true)
 
 return ItemESP
