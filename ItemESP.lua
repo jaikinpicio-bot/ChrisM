@@ -1,6 +1,6 @@
--- =====================
--- MODULE: ItemESP
--- =====================
+-- =====================================================================
+-- MODULE: ItemESP (Optimized & Pre-Activated Full Script)
+-- =====================================================================
 local Players           = game:GetService("Players")
 local Workspace         = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -28,7 +28,6 @@ local function isAccessory(name)
 end
 
 -- ── Zombie detection ───────────────────────────────────────
--- Only models that are direct children of Workspace.Zombies
 local function isZombie(model)
     local zombieFolder = Workspace:FindFirstChild("Zombies")
     if not zombieFolder then return false end
@@ -51,7 +50,7 @@ local function buildRegistry()
     end
 end
 
--- ── Player char registry (so we never tag player accessories) ──
+-- ── Player char registry ───────────────────────────────────
 local playerChars = {}
 
 local function refreshPlayerChars()
@@ -73,7 +72,7 @@ end
 -- ── Should this model have ESP? ────────────────────────────
 local function shouldESP(model)
     if not ItemESP.Enabled then return false end
-    if isOwnedByPlayer(model) then return false end  -- never tag player-worn items
+    if isOwnedByPlayer(model) then return false end
 
     if isZombie(model) then
         return ItemESP.Zombies
@@ -157,18 +156,29 @@ local function removeESP(model)
     if bb then bb:Destroy() end
 end
 
--- ── Re-evaluate all existing models ───────────────────────
+-- ── Re-evaluate all existing models (Lag-Proof Fix) ───
 local function scanAll()
     refreshPlayerChars()
-    for _, desc in ipairs(Workspace:GetDescendants()) do
-        if desc:IsA("Model") then
-            if shouldESP(desc) then
-                applyESP(desc)
-            else
-                removeESP(desc)
+    
+    task.spawn(function()
+        local count = 0
+        for _, desc in ipairs(Workspace:GetDescendants()) do
+            if desc:IsA("Model") then
+                count = count + 1
+                
+                -- Yields to prevent frame timeout freezes
+                if count % 150 == 0 then
+                    task.wait()
+                end
+                
+                if shouldESP(desc) then
+                    applyESP(desc)
+                else
+                    removeESP(desc)
+                end
             end
         end
-    end
+    end)
 end
 
 -- ── Public API ─────────────────────────────────────────────
@@ -191,16 +201,23 @@ function ItemESP:Init()
     buildRegistry()
 
     -- Track player characters
-    Players.PlayerAdded:Connect(function(p)
+    local function hookCharacter(p)
         p.CharacterAdded:Connect(function(c)
             playerChars[c] = true
+            scanAll()
         end)
+    end
+
+    Players.PlayerAdded:Connect(function(p)
+        hookCharacter(p)
     end)
+    
     Players.PlayerRemoving:Connect(function(p)
         if p.Character then playerChars[p.Character] = nil end
     end)
+    
     for _, p in ipairs(Players:GetPlayers()) do
-        p.CharacterAdded:Connect(function(c) playerChars[c] = true end)
+        hookCharacter(p)
         if p.Character then playerChars[p.Character] = true end
     end
 
@@ -227,5 +244,9 @@ function ItemESP:Destroy()
     self.Enabled = false
     scanAll()
 end
+
+-- ── AUTOMATIC ACTIVATION ────────────────────────────────────
+ItemESP:Init()
+ItemESP:SetEnabled(true)
 
 return ItemESP
