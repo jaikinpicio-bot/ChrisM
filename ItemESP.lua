@@ -28,7 +28,6 @@ local function isAccessory(name)
 end
 
 -- ── Zombie detection ───────────────────────────────────────
--- Only models that are direct children of Workspace.Zombies
 local function isZombie(model)
     local zombieFolder = Workspace:FindFirstChild("Zombies")
     if not zombieFolder then return false end
@@ -51,7 +50,7 @@ local function buildRegistry()
     end
 end
 
--- ── Player char registry (so we never tag player accessories) ──
+-- ── Player char registry ───────────────────────────────────
 local playerChars = {}
 
 local function refreshPlayerChars()
@@ -73,7 +72,7 @@ end
 -- ── Should this model have ESP? ────────────────────────────
 local function shouldESP(model)
     if not ItemESP.Enabled then return false end
-    if isOwnedByPlayer(model) then return false end  -- never tag player-worn items
+    if isOwnedByPlayer(model) then return false end
 
     if isZombie(model) then
         return ItemESP.Zombies
@@ -90,7 +89,7 @@ local function shouldESP(model)
     return false
 end
 
--- ── Apply / remove ESP on a model ─────────────────────────
+-- ── Apply / remove ESP ─────────────────────────────────────
 local function applyESP(model)
     if model:FindFirstChild("_ItemESP") then return end
 
@@ -132,20 +131,20 @@ local function applyESP(model)
                 hl.Enabled = false
                 bb.Enabled = false
                 task.wait(0.5)
-                continue
-            end
-            local myChar = LocalPlayer.Character
-            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-            if myRoot then
-                local dist    = math.floor((myRoot.Position - anchor.Position).Magnitude)
-                local inRange = dist <= ItemESP.MaxDistance
-                hl.Enabled    = inRange
-                bb.Enabled    = inRange
-                if inRange then
-                    lbl.Text = model.Name .. " [" .. dist .. "m]"
+            else
+                local myChar = LocalPlayer.Character
+                local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                if myRoot then
+                    local dist    = math.floor((myRoot.Position - anchor.Position).Magnitude)
+                    local inRange = dist <= ItemESP.MaxDistance
+                    hl.Enabled    = inRange
+                    bb.Enabled    = inRange
+                    if inRange then
+                        lbl.Text = model.Name .. " [" .. dist .. "m]"
+                    end
                 end
+                task.wait(0.2)
             end
-            task.wait(0.2)
         end
     end)
 end
@@ -157,7 +156,7 @@ local function removeESP(model)
     if bb then bb:Destroy() end
 end
 
--- ── Re-evaluate all existing models ───────────────────────
+-- ── Scan all ───────────────────────────────────────────────
 local function scanAll()
     refreshPlayerChars()
     for _, desc in ipairs(Workspace:GetDescendants()) do
@@ -190,7 +189,6 @@ end
 function ItemESP:Init()
     buildRegistry()
 
-    -- Track player characters
     Players.PlayerAdded:Connect(function(p)
         p.CharacterAdded:Connect(function(c)
             playerChars[c] = true
@@ -206,7 +204,6 @@ function ItemESP:Init()
 
     scanAll()
 
-    -- Watch for newly streamed-in models
     Workspace.DescendantAdded:Connect(function(desc)
         if not ItemESP.Enabled then return end
         if not desc:IsA("Model") then return end
@@ -215,11 +212,8 @@ function ItemESP:Init()
         if shouldESP(desc) then applyESP(desc) end
     end)
 
-    -- Clean up when models are removed
     Workspace.DescendantRemoving:Connect(function(desc)
-        if desc:IsA("Model") then
-            removeESP(desc)
-        end
+        if desc:IsA("Model") then removeESP(desc) end
     end)
 end
 
