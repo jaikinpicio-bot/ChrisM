@@ -1,15 +1,13 @@
 -- =====================
 -- MODULE: ItemESP
 -- =====================
-local Players           = game:GetService("Players")
 local Workspace         = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local LocalPlayer = Players.LocalPlayer
+local Players           = game:GetService("Players")
+local LocalPlayer       = Players.LocalPlayer
 
 local ItemESP = {}
 
--- ── Config ─────────────────────────────────────────────────
 ItemESP.Enabled     = false
 ItemESP.Accessories = true
 ItemESP.MaxDistance = 500
@@ -19,60 +17,23 @@ local TEXT_COLOR = Color3.fromRGB(255, 255, 255)
 
 local ACCESSORY_PREFIXES = { "Accessory", "Belt", "Hat" }
 
+-- ── Registry (built synchronously at top level) ────────────
+local ItemRegistry = {}
+local itemsFolder  = ReplicatedStorage:WaitForChild("Assets"):WaitForChild("Items")
+for _, item in ipairs(itemsFolder:GetChildren()) do
+    ItemRegistry[item.Name:lower()] = true
+end
+itemsFolder.ChildAdded:Connect(function(item)
+    ItemRegistry[item.Name:lower()] = true
+end)
+print("ItemESP: Registry built with " .. tostring(#itemsFolder:GetChildren()) .. " items")
+
+-- ── Helpers ────────────────────────────────────────────────
 local function isAccessory(name)
     for _, prefix in ipairs(ACCESSORY_PREFIXES) do
         if string.sub(name, 1, #prefix) == prefix then return true end
     end
     return false
-end
-
--- ── Zombie detection ───────────────────────────────────────
-local function isZombie(model)
-    local zombieFolder = Workspace:FindFirstChild("Zombies")
-    if not zombieFolder then return false end
-    return model.Parent == zombieFolder
-end
-
--- ── Item registry ──────────────────────────────────────────
-local TargetItems = {}
-
-local function buildRegistry()
-    task.spawn(function()
-        -- Wait up to 30s for the folder to exist, retrying every second
-        local itemsFolder
-        for _ = 1, 30 do
-            local ok, result = pcall(function()
-                return ReplicatedStorage:WaitForChild("Assets", 1):WaitForChild("Items", 1)
-            end)
-            if ok and result then
-                itemsFolder = result
-                break
-            end
-            task.wait(1)
-        end
-        if not itemsFolder then
-            warn("ItemESP: Could not find ReplicatedStorage.Assets.Items after 30s")
-            return
-        end
-        for _, item in ipairs(itemsFolder:GetChildren()) do
-            TargetItems[item.Name:lower()] = true
-        end
-        -- Also listen for items added later
-        itemsFolder.ChildAdded:Connect(function(item)
-            TargetItems[item.Name:lower()] = true
-        end)
-        print("ItemESP: Registry built with " .. tostring(#itemsFolder:GetChildren()) .. " items")
-    end)
-end
-
--- ── Player char registry ───────────────────────────────────
-local playerChars = {}
-
-local function refreshPlayerChars()
-    playerChars = {}
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p.Character then playerChars[p.Character] = true end
-    end
 end
 
 local function isOwnedByPlayer(model)
@@ -84,17 +45,16 @@ local function isOwnedByPlayer(model)
     return false
 end
 
--- ── Should this model have ESP? ────────────────────────────
 local function shouldESP(model)
     if not ItemESP.Enabled then return false end
 
-    -- Accessories: show even on players (hats, belts etc worn by players)
+    -- Accessories show on anyone including players
     if isAccessory(model.Name) then
         return ItemESP.Accessories
     end
 
-    -- Registered items: only show if NOT owned by a player
-    if TargetItems[model.Name:lower()] then
+    -- Registered items only show if on the ground (not in a player's character)
+    if ItemRegistry[model.Name:lower()] then
         if isOwnedByPlayer(model) then return false end
         return true
     end
@@ -102,14 +62,15 @@ local function shouldESP(model)
     return false
 end
 
--- ── Apply / remove ESP ─────────────────────────────────────
+-- ── Apply / remove ─────────────────────────────────────────
 local function applyESP(model)
     if model:FindFirstChild("_ItemESP") then return end
 
-    local anchor = model:FindFirstChild("Base")
+    local anchorPart = model.PrimaryPart
+        or model:FindFirstChild("Base")
         or model:FindFirstChildWhichIsA("MeshPart")
         or model:FindFirstChildWhichIsA("BasePart")
-    if not anchor then return end
+    if not anchorPart then return end
 
     local hl = Instance.new("Highlight")
     hl.Name                = "_ItemESP"
@@ -126,7 +87,7 @@ local function applyESP(model)
     bb.Size          = UDim2.new(0, 200, 0, 50)
     bb.AlwaysOnTop   = true
     bb.ExtentsOffset = Vector3.new(0, 1.5, 0)
-    bb.Adornee       = anchor
+    bb.Adornee       = anchorPart
     bb.Parent        = model
 
     local lbl = Instance.new("TextLabel")
@@ -139,7 +100,7 @@ local function applyESP(model)
     lbl.Parent                 = bb
 
     task.spawn(function()
-        while model and model.Parent and anchor and anchor.Parent do
+        while model and model.Parent and anchorPart and anchorPart.Parent do
             if not ItemESP.Enabled then
                 hl.Enabled = false
                 bb.Enabled = false
@@ -148,7 +109,7 @@ local function applyESP(model)
                 local myChar = LocalPlayer.Character
                 local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
                 if myRoot then
-                    local dist    = math.floor((myRoot.Position - anchor.Position).Magnitude)
+                    local dist    = math.floor((myRoot.Position - anchorPart.Position).Magnitude)
                     local inRange = dist <= ItemESP.MaxDistance
                     hl.Enabled    = inRange
                     bb.Enabled    = inRange
@@ -169,17 +130,18 @@ local function removeESP(model)
     if bb then bb:Destroy() end
 end
 
--- ── Scan all ───────────────────────────────────────────────
+local function evaluate(instance)
+    if not instance:IsA("Model") then return end
+    if shouldESP(instance) then
+        applyESP(instance)
+    else
+        removeESP(instance)
+    end
+end
+
 local function scanAll()
-    refreshPlayerChars()
     for _, desc in ipairs(Workspace:GetDescendants()) do
-        if desc:IsA("Model") then
-            if shouldESP(desc) then
-                applyESP(desc)
-            else
-                removeESP(desc)
-            end
-        end
+        evaluate(desc)
     end
 end
 
@@ -195,29 +157,12 @@ function ItemESP:SetAccessories(state)
 end
 
 function ItemESP:Init()
-    buildRegistry()
-
-    Players.PlayerAdded:Connect(function(p)
-        p.CharacterAdded:Connect(function(c)
-            playerChars[c] = true
-        end)
-    end)
-    Players.PlayerRemoving:Connect(function(p)
-        if p.Character then playerChars[p.Character] = nil end
-    end)
-    for _, p in ipairs(Players:GetPlayers()) do
-        p.CharacterAdded:Connect(function(c) playerChars[c] = true end)
-        if p.Character then playerChars[p.Character] = true end
-    end
-
     scanAll()
 
     Workspace.DescendantAdded:Connect(function(desc)
         if not ItemESP.Enabled then return end
-        if not desc:IsA("Model") then return end
         task.wait(0.1)
-        refreshPlayerChars()
-        if shouldESP(desc) then applyESP(desc) end
+        evaluate(desc)
     end)
 
     Workspace.DescendantRemoving:Connect(function(desc)
