@@ -1,18 +1,10 @@
 -- =====================
 -- MAIN: ChrisM Hub
 -- =====================
-local BASE = "https://raw.githubusercontent.com/SadManic/ChrisM/main/"
+local BASE = "https://raw.githubusercontent.com/jaikinpicio-bot/ChrisM/main/"
 
 local function load(path)
-    print("⏳ Loading: " .. path)
-    local src = game:HttpGet(BASE .. path)
-    print("📦 Got " .. #src .. " bytes for: " .. path)
-    local fn, err = loadstring(src)
-    if not fn then
-        error("❌ COMPILE ERROR in " .. path .. ": " .. tostring(err), 2)
-    end
-    print("✅ OK: " .. path)
-    return fn()
+    return loadstring(game:HttpGet(BASE .. path))()
 end
 
 local Aimbot     = load("Aimbot.lua")
@@ -38,7 +30,7 @@ UI.makePageTitle(VisualsPage, "Visuals")
 -- ── Player ESP ────────────────────────────
 UI.makeSectionLabel(VisualsPage, 0, "— Player ESP")
 
-local subChams, subHealth, subSkeleton, subBoxes, subNames, subWeapon
+local subChams, subHealth, subSkeleton, subBoxes, subNames, subWeapon, subZombies
 
 UI.makeToggleRow(VisualsPage, 0, "ESP", false, function(state)
     ESP:SetEnabled(state)
@@ -48,6 +40,7 @@ UI.makeToggleRow(VisualsPage, 0, "ESP", false, function(state)
     subBoxes.Visible    = state
     subNames.Visible    = state
     subWeapon.Visible   = state
+    subZombies.Visible  = state
 end)
 
 subChams    = UI.makeSubToggleRow(VisualsPage, 0, "Chams",        false, function(s) ESP:SetChams(s)    end)
@@ -56,19 +49,18 @@ subSkeleton = UI.makeSubToggleRow(VisualsPage, 0, "Skeleton",     false, functio
 subBoxes    = UI.makeSubToggleRow(VisualsPage, 0, "Boxes",        true,  function(s) ESP.Boxes = s      end)
 subNames    = UI.makeSubToggleRow(VisualsPage, 0, "Names",        true,  function(s) ESP.Names = s      end)
 subWeapon   = UI.makeSubToggleRow(VisualsPage, 0, "Weapon Label", true,  function(s) ESP.WeaponText = s end)
+subZombies  = UI.makeSubToggleRow(VisualsPage, 0, "Zombies",      false, function(s) ESP:SetZombies(s)  end)
 
 -- ── Item ESP ──────────────────────────────
 UI.makeSectionLabel(VisualsPage, 0, "— Item ESP")
 
-local subZombies, subAccessories
+local subAccessories
 
 UI.makeToggleRow(VisualsPage, 0, "Item ESP", false, function(state)
     ItemESP:SetEnabled(state)
-    subZombies.Visible     = state
     subAccessories.Visible = state
 end)
 
-subZombies     = UI.makeSubToggleRow(VisualsPage, 0, "Zombies",     true, function(s) ItemESP:SetZombies(s)     end)
 subAccessories = UI.makeSubToggleRow(VisualsPage, 0, "Accessories", true, function(s) ItemESP:SetAccessories(s) end)
 
 UI.makeSliderRow(VisualsPage, 0, "Item ESP Distance (m)", 50, 2000, 500, function(val)
