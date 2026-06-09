@@ -37,16 +37,32 @@ end
 local TargetItems = {}
 
 local function buildRegistry()
-    local ok, itemsFolder = pcall(function()
-        return ReplicatedStorage:WaitForChild("Assets", 5):WaitForChild("Items", 5)
+    task.spawn(function()
+        -- Wait up to 30s for the folder to exist, retrying every second
+        local itemsFolder
+        for _ = 1, 30 do
+            local ok, result = pcall(function()
+                return ReplicatedStorage:WaitForChild("Assets", 1):WaitForChild("Items", 1)
+            end)
+            if ok and result then
+                itemsFolder = result
+                break
+            end
+            task.wait(1)
+        end
+        if not itemsFolder then
+            warn("ItemESP: Could not find ReplicatedStorage.Assets.Items after 30s")
+            return
+        end
+        for _, item in ipairs(itemsFolder:GetChildren()) do
+            TargetItems[item.Name:lower()] = true
+        end
+        -- Also listen for items added later
+        itemsFolder.ChildAdded:Connect(function(item)
+            TargetItems[item.Name:lower()] = true
+        end)
+        print("ItemESP: Registry built with " .. tostring(#itemsFolder:GetChildren()) .. " items")
     end)
-    if not ok or not itemsFolder then
-        warn("ItemESP: Could not find ReplicatedStorage.Assets.Items")
-        return
-    end
-    for _, item in ipairs(itemsFolder:GetChildren()) do
-        TargetItems[item.Name:lower()] = true
-    end
 end
 
 -- ── Player char registry ───────────────────────────────────
