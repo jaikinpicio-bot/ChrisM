@@ -11,7 +11,6 @@ local ItemESP = {}
 
 -- ── Config ─────────────────────────────────────────────────
 ItemESP.Enabled     = false
-ItemESP.Zombies     = true
 ItemESP.Accessories = true
 ItemESP.MaxDistance = 500
 
@@ -72,17 +71,15 @@ end
 -- ── Should this model have ESP? ────────────────────────────
 local function shouldESP(model)
     if not ItemESP.Enabled then return false end
-    if isOwnedByPlayer(model) then return false end
 
-    if isZombie(model) then
-        return ItemESP.Zombies
-    end
-
+    -- Accessories: show even on players (hats, belts etc worn by players)
     if isAccessory(model.Name) then
         return ItemESP.Accessories
     end
 
+    -- Registered items: only show if NOT owned by a player
     if TargetItems[model.Name:lower()] then
+        if isOwnedByPlayer(model) then return false end
         return true
     end
 
@@ -173,11 +170,6 @@ end
 -- ── Public API ─────────────────────────────────────────────
 function ItemESP:SetEnabled(state)
     self.Enabled = state
-    scanAll()
-end
-
-function ItemESP:SetZombies(state)
-    self.Zombies = state
     scanAll()
 end
 
