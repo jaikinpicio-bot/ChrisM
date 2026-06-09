@@ -2,7 +2,6 @@
 -- MODULE: ItemESP
 -- =====================
 local Workspace         = game:GetService("Workspace")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players           = game:GetService("Players")
 local LocalPlayer       = Players.LocalPlayer
 
@@ -12,21 +11,13 @@ ItemESP.Enabled     = false
 ItemESP.Accessories = true
 ItemESP.MaxDistance = 500
 
-local ESP_COLOR  = Color3.fromRGB(255, 0, 0)
+local ESP_COLOR  = Color3.fromRGB(255, 0, 100)
 local TEXT_COLOR = Color3.fromRGB(255, 255, 255)
 
-local ACCESSORY_PREFIXES = { "Accessory", "Belt", "Hat" }
+local ACCESSORY_PREFIXES = { "Accessory", "Belt", "Hat", "Hair", "Vest" }
 
--- ── Registry (built synchronously at top level) ────────────
-local ItemRegistry = {}
-local itemsFolder  = ReplicatedStorage:WaitForChild("Assets"):WaitForChild("Items")
-for _, item in ipairs(itemsFolder:GetChildren()) do
-    ItemRegistry[item.Name:lower()] = true
-end
-itemsFolder.ChildAdded:Connect(function(item)
-    ItemRegistry[item.Name:lower()] = true
-end)
-print("ItemESP: Registry built with " .. tostring(#itemsFolder:GetChildren()) .. " items")
+-- Characters folder (player gear is parented here)
+local CharactersFolder = Workspace:WaitForChild("Characters", 5)
 
 -- ── Helpers ────────────────────────────────────────────────
 local function isAccessory(name)
@@ -36,27 +27,27 @@ local function isAccessory(name)
     return false
 end
 
-local function isOwnedByPlayer(model)
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p.Character and model:IsDescendantOf(p.Character) then
+-- Check if a model is worn/held by a player (using the working logic)
+local function isWornByPlayer(instance)
+    -- Check A: inside the Characters folder but not the root player model
+    if CharactersFolder and instance:IsDescendantOf(CharactersFolder) then
+        if instance ~= LocalPlayer.Character and instance.Parent ~= CharactersFolder then
             return true
         end
     end
-    return false
-end
 
-local function shouldESP(model)
-    if not ItemESP.Enabled then return false end
-
-    -- Accessories show on anyone including players
-    if isAccessory(model.Name) then
-        return ItemESP.Accessories
-    end
-
-    -- Registered items only show if on the ground (not in a player's character)
-    if ItemRegistry[model.Name:lower()] then
-        if isOwnedByPlayer(model) then return false end
-        return true
+    -- Check B: traverse up looking for Equipment folder or Humanoid
+    local currentParent = instance.Parent
+    local loops = 0
+    while currentParent and currentParent ~= Workspace and loops < 5 do
+        if not currentParent or not currentParent.Parent then break end
+        if currentParent.Name == "Equipment" or currentParent:FindFirstChildOfClass("Humanoid") then
+            if currentParent ~= LocalPlayer.Character then
+                return true
+            end
+        end
+        currentParent = currentParent.Parent
+        loops = loops + 1
     end
 
     return false
@@ -75,7 +66,7 @@ local function applyESP(model)
     local hl = Instance.new("Highlight")
     hl.Name                = "_ItemESP"
     hl.FillColor           = ESP_COLOR
-    hl.FillTransparency    = 0.6
+    hl.FillTransparency    = 0.5
     hl.OutlineColor        = ESP_COLOR
     hl.OutlineTransparency = 0
     hl.DepthMode           = Enum.HighlightDepthMode.AlwaysOnTop
@@ -86,7 +77,7 @@ local function applyESP(model)
     bb.Name          = "_ItemESPBB"
     bb.Size          = UDim2.new(0, 200, 0, 50)
     bb.AlwaysOnTop   = true
-    bb.ExtentsOffset = Vector3.new(0, 1.5, 0)
+    bb.ExtentsOffset = Vector3.new(0, 1, 0)
     bb.Adornee       = anchorPart
     bb.Parent        = model
 
@@ -94,7 +85,7 @@ local function applyESP(model)
     lbl.Size                   = UDim2.new(1, 0, 1, 0)
     lbl.BackgroundTransparency = 1
     lbl.TextColor3             = TEXT_COLOR
-    lbl.TextSize               = 14
+    lbl.TextSize               = 13
     lbl.Font                   = Enum.Font.SourceSansBold
     lbl.TextStrokeTransparency = 0
     lbl.Parent                 = bb
@@ -117,7 +108,7 @@ local function applyESP(model)
                         lbl.Text = model.Name .. " [" .. dist .. "m]"
                     end
                 end
-                task.wait(0.2)
+                task.wait(0.3)
             end
         end
     end)
@@ -130,9 +121,22 @@ local function removeESP(model)
     if bb then bb:Destroy() end
 end
 
+-- ── Evaluate a model ───────────────────────────────────────
 local function evaluate(instance)
+    if not instance or not instance.Parent then return end
     if not instance:IsA("Model") then return end
-    if shouldESP(instance) then
+    if not ItemESP.Enabled then return end
+
+    local shouldShow = false
+
+    -- Only show items worn/held by players
+    if isWornByPlayer(instance) then
+        if ItemESP.Accessories and isAccessory(instance.Name) then
+            shouldShow = true
+        end
+    end
+
+    if shouldShow then
         applyESP(instance)
     else
         removeESP(instance)
@@ -141,7 +145,7 @@ end
 
 local function scanAll()
     for _, desc in ipairs(Workspace:GetDescendants()) do
-        evaluate(desc)
+        pcall(function() evaluate(desc) end)
     end
 end
 
@@ -162,7 +166,7 @@ function ItemESP:Init()
     Workspace.DescendantAdded:Connect(function(desc)
         if not ItemESP.Enabled then return end
         task.wait(0.1)
-        evaluate(desc)
+        pcall(function() evaluate(desc) end)
     end)
 
     Workspace.DescendantRemoving:Connect(function(desc)
