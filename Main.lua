@@ -364,6 +364,7 @@ local function load(path)
     return result
 end
 
+local Crosshair  = load("Crosshair.lua")
 local Aimbot     = load("Aimbot.lua")
 local ESP        = load("ESP.lua")
 local Fullbright = load("Fullbright.lua")
@@ -384,7 +385,7 @@ dismissLoadScreen()
 local required = {
     "makePage","getCol","makeSectionLabel","makeToggleRow","makeSubToggleRow",
     "makeSliderRow","makeDropdownRow","makeInputRow","makeActionBtn",
-    "makeStatusLabel","makeSpacer","setupNavigation","switchTo",
+    "makeStatusLabel","makeSpacer","makeColorPickerRow","setupNavigation","switchTo",
     "setupDrag","setupWindowControls","toast","mount"
 }
 for _, fn in ipairs(required) do
@@ -394,6 +395,7 @@ for _, fn in ipairs(required) do
 end
 print("✅ UI API verified")
 
+Crosshair:Init()
 Aimbot:Init()
 ESP:Init()
 Teleport:Init()
@@ -412,35 +414,86 @@ UI.makeToggleRow(cL, "Aimbot", false, function(s)
     Aimbot:SetEnabled(s)
     UI.toast("Aimbot", s)
 end)
-UI.makeToggleRow(cL, "Wall Check", true, function(s)
+UI.makeSubToggleRow(cL, "Wall Check", true, function(s)
     Aimbot.WallCheck = s
     UI.toast("Wall Check", s)
 end)
-
-UI.makeSectionLabel(cL, "Targeting")
 UI.makeDropdownRow(cL, "Target Bone", {
     "Head", "HumanoidRootPart", "UpperTorso", "Torso", "RightUpperArm", "LeftUpperArm"
 }, 1, function(val)
     Aimbot.TargetBone = val
 end)
-UI.makeSliderRow(cL, "FOV Radius (px)", 50, 400, 150, function(val)
+UI.makeSliderRow(cL, "Smoothness", 1, 20, 3, function(val)
+    Aimbot.Smooth = val
+end)
+UI.makeSliderRow(cL, "Bullet Velocity (studs/s)", 1, 4625, 800, function(val)
+    Aimbot.BulletVelocity = val
+end)
+
+UI.makeSectionLabel(cR, "FOV")
+UI.makeSliderRow(cR, "FOV Radius (px)", 50, 400, 150, function(val)
     Aimbot.FOV = val
     local c = Aimbot:GetOverlayCircle()
     if c then c.Radius = val end
 end)
 
-UI.makeSectionLabel(cR, "Behaviour")
-UI.makeSliderRow(cR, "Smoothness", 1, 20, 3, function(val)
-    Aimbot.Smooth = val
-end)
-UI.makeSliderRow(cR, "Bullet Velocity (studs/s)", 1, 4625, 800, function(val)
-    Aimbot.BulletVelocity = val
-end)
-
 -- ══════════════════════════════════════════
 -- LEGIT PAGE  (nav key: "legit")
+-- Crosshair editor
 -- ══════════════════════════════════════════
 UI.makePage("legit")
+local lL = UI.getCol("legit", "left")
+local lR = UI.getCol("legit", "right")
+
+-- ── Left column: enable + shape + size ───────────────────
+UI.makeSectionLabel(lL, "Crosshair")
+UI.makeToggleRow(lL, "Enable Crosshair", false, function(s)
+    Crosshair:SetEnabled(s)
+    UI.toast("Crosshair", s)
+end)
+
+UI.makeSectionLabel(lL, "Style")
+UI.makeDropdownRow(lL, "Style", {
+    "Cross", "Circle", "Dot only", "Cross + Circle", "T-shape"
+}, 1, function(val)
+    local map = {
+        ["Cross"] = "cross", ["Circle"] = "circle",
+        ["Dot only"] = "dot", ["Cross + Circle"] = "cross+circle",
+        ["T-shape"] = "t"
+    }
+    Crosshair.Style = map[val] or "cross"
+end)
+
+UI.makeSectionLabel(lL, "Size")
+UI.makeSliderRow(lL, "Length",    2, 30, 10, function(v) Crosshair.Length    = v end)
+UI.makeSliderRow(lL, "Thickness", 1,  8,  2, function(v) Crosshair.Thickness = v end)
+UI.makeSliderRow(lL, "Gap",       0, 16,  4, function(v) Crosshair.Gap       = v end)
+UI.makeSliderRow(lL, "Dot size",  0,  8,  0, function(v) Crosshair.DotSize   = v end)
+
+UI.makeSectionLabel(lL, "Arms")
+UI.makeSubToggleRow(lL, "Top",    true,  function(s) Crosshair.ShowTop    = s end)
+UI.makeSubToggleRow(lL, "Bottom", true,  function(s) Crosshair.ShowBottom = s end)
+UI.makeSubToggleRow(lL, "Left",   true,  function(s) Crosshair.ShowLeft   = s end)
+UI.makeSubToggleRow(lL, "Right",  true,  function(s) Crosshair.ShowRight  = s end)
+
+-- ── Right column: appearance + outline + options ─────────
+UI.makeSectionLabel(lR, "Colour")
+UI.makeColorPickerRow(lR, "Crosshair color",  Color3.fromRGB(0, 255, 136), function(c)
+    Crosshair.Color = c
+end)
+UI.makeColorPickerRow(lR, "Outline color", Color3.fromRGB(0, 0, 0), function(c)
+    Crosshair.OutlineColor = c
+end)
+
+UI.makeSectionLabel(lR, "Appearance")
+UI.makeSliderRow(lR, "Opacity (%)",     10, 100, 100, function(v) Crosshair.Opacity      = v / 100 end)
+UI.makeSliderRow(lR, "Outline width",    0,   4,   1, function(v) Crosshair.OutlineWidth = v end)
+
+UI.makeSectionLabel(lR, "Behaviour")
+UI.makeSubToggleRow(lR, "Dynamic expand", false, function(s)
+    Crosshair.Dynamic = s
+    UI.toast("Dynamic expand", s)
+end)
 
 -- ══════════════════════════════════════════
 -- VISUALS PAGE  (nav key: "visuals")
@@ -597,6 +650,7 @@ UI.setupNavigation()
 UI.switchTo("combat")
 UI.setupDrag()
 UI.setupWindowControls(function()
+    Crosshair:Destroy()
     Aimbot:Destroy()
     ESP:Destroy()
     ItemESP:Destroy()
