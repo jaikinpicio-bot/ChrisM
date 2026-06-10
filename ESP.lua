@@ -24,7 +24,12 @@ local OUTLINE_COLOR     = Color3.fromRGB(255, 255, 255)
 local FILL_TRANSPARENCY = 0.5
 local MAX_CHAMS         = 30
 local ENGINE_CHAM_LIMIT = 1000
-local TEXT_OFFSET       = 25
+
+-- Name label config — small and semi-transparent for combat readability
+local NAME_TEXT_SIZE    = 11       -- down from 14, less screen clutter
+local NAME_TRANSPARENCY = 0.35    -- slight fade so it doesn't overpower the scene
+local NAME_OFFSET_Y     = 18      -- tighter above head
+local WEAPON_OFFSET_Y   = NAME_OFFSET_Y + 13
 
 local SKELETON_BONES = {
     {"Head","UpperTorso"}, {"Head","Torso"},
@@ -57,8 +62,12 @@ local function createEntry(player)
     if ActiveESP[player] or player == LocalPlayer then return end
     ActiveESP[player] = {
         Text = newDrawing("Text", {
-            Color = Color3.fromRGB(255,255,255), Size = 14,
-            Center = true, Outline = true, Visible = false,
+            Color       = Color3.fromRGB(255, 255, 255),
+            Size        = NAME_TEXT_SIZE,
+            Center      = true,
+            Outline     = true,
+            Transparency = NAME_TRANSPARENCY,
+            Visible     = false,
         }),
         Box = newDrawing("Square", {
             Color = ESP_COLOR, Thickness = 1.5, Filled = false, Visible = false,
@@ -70,8 +79,12 @@ local function createEntry(player)
             Color = Color3.fromRGB(0,255,80), Thickness = 1, Filled = true, Visible = false,
         }),
         WeaponText = newDrawing("Text", {
-            Color = Color3.fromRGB(255,200,0), Size = 12,
-            Center = true, Outline = true, Visible = false,
+            Color        = Color3.fromRGB(255, 200, 0),
+            Size         = 10,
+            Center       = true,
+            Outline      = true,
+            Transparency = NAME_TRANSPARENCY,
+            Visible      = false,
         }),
         Cham  = nil,
         Bones = {},
@@ -125,30 +138,34 @@ local function renderFrame()
                     Distance = dist, Character = character, Humanoid = humanoid
                 })
 
-                -- Name label
+                -- Name label — small, semi-transparent, distance shown in brackets
                 local headPos, headOn = camera:WorldToViewportPoint(head.Position)
                 if headOn and ESP.Names then
-                    d.Text.Position = Vector2.new(headPos.X, headPos.Y - TEXT_OFFSET)
-                    d.Text.Text     = string.format("%s [%d]", player.Name, math.floor(dist))
-                    d.Text.Visible  = true
+                    d.Text.Position     = Vector2.new(headPos.X, headPos.Y - NAME_OFFSET_Y)
+                    d.Text.Text         = player.Name .. " [" .. math.floor(dist) .. "m]"
+                    d.Text.Size         = NAME_TEXT_SIZE
+                    d.Text.Transparency = NAME_TRANSPARENCY
+                    d.Text.Visible      = true
                 else
                     d.Text.Visible = false
                 end
 
-                -- Weapon label
+                -- Weapon label — one line below name
                 local tool = character:FindFirstChildOfClass("Tool")
                 if tool and headOn and ESP.WeaponText then
-                    d.WeaponText.Position = Vector2.new(headPos.X, headPos.Y - TEXT_OFFSET + 16)
-                    d.WeaponText.Text     = "🔫 " .. tool.Name
-                    d.WeaponText.Visible  = true
+                    d.WeaponText.Position     = Vector2.new(headPos.X, headPos.Y - WEAPON_OFFSET_Y)
+                    d.WeaponText.Text         = tool.Name
+                    d.WeaponText.Size         = 10
+                    d.WeaponText.Transparency = NAME_TRANSPARENCY
+                    d.WeaponText.Visible      = true
                 else
                     d.WeaponText.Visible = false
                 end
 
                 -- Bounding box
-                local topWorld = head.Position + Vector3.new(0, head.Size.Y / 2, 0)
-                local lFoot    = character:FindFirstChild("LeftFoot")  or character:FindFirstChild("Left Leg")
-                local rFoot    = character:FindFirstChild("RightFoot") or character:FindFirstChild("Right Leg")
+                local topWorld    = head.Position + Vector3.new(0, head.Size.Y / 2, 0)
+                local lFoot       = character:FindFirstChild("LeftFoot")  or character:FindFirstChild("Left Leg")
+                local rFoot       = character:FindFirstChild("RightFoot") or character:FindFirstChild("Right Leg")
                 local bottomWorld = (lFoot and rFoot)
                     and Vector3.new(root.Position.X, math.min(lFoot.Position.Y, rFoot.Position.Y) - 1, root.Position.Z)
                     or  root.Position - Vector3.new(0, 3, 0)
@@ -174,9 +191,9 @@ local function renderFrame()
                     local bx    = topSc.X - w / 2
                     local by    = topSc.Y
                     local barX  = bx - 6
-                    d.HealthBg.Position  = Vector2.new(barX - 1, by - 1)
-                    d.HealthBg.Size      = Vector2.new(5, h + 2)
-                    d.HealthBg.Visible   = true
+                    d.HealthBg.Position   = Vector2.new(barX - 1, by - 1)
+                    d.HealthBg.Size       = Vector2.new(5, h + 2)
+                    d.HealthBg.Visible    = true
                     local fillH = h * ratio
                     d.HealthFill.Position = Vector2.new(barX, by + (h - fillH))
                     d.HealthFill.Size     = Vector2.new(3, fillH)
@@ -247,7 +264,7 @@ local function renderFrame()
         end
     end
 
-    -- Zombie ESP (highlights NPCs in Workspace.Zombies folder)
+    -- Zombie ESP
     local zombieFolder = Workspace:FindFirstChild("Zombies")
     if ESP.Zombies and zombieFolder then
         for _, model in ipairs(zombieFolder:GetChildren()) do
