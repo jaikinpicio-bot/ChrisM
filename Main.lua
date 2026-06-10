@@ -1,4 +1,3 @@
-
 -- =====================
 -- MAIN: ChrisM Hub
 -- =====================
@@ -29,11 +28,12 @@ local loadProgress = {
 -- Full-screen overlay, appears before anything else
 -- ══════════════════════════════════════════
 local LoadGui = Instance.new("ScreenGui")
-LoadGui.Name           = "ChrisMLoadScreen"
-LoadGui.DisplayOrder   = 999
-LoadGui.ResetOnSpawn   = false
-LoadGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-LoadGui.Parent         = PlayerGui
+LoadGui.Name            = "ChrisMLoadScreen"
+LoadGui.DisplayOrder    = 999
+LoadGui.ResetOnSpawn    = false
+LoadGui.ZIndexBehavior  = Enum.ZIndexBehavior.Sibling
+LoadGui.IgnoreGuiInset  = true  -- stretch to true top-left, no topbar gap
+LoadGui.Parent          = PlayerGui
 
 -- Dark full-screen backdrop
 local Backdrop = Instance.new("Frame")
