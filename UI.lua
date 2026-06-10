@@ -16,9 +16,6 @@ local PILL_H    = 18
 local KNOB_SIZE = 14
 local KNOB_PAD  = 2
 
-local TWEEN_IN  = TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-local TWEEN_OUT = TweenInfo.new(0.15, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
-
 local FONT_REGULAR = Font.new(
     "rbxasset://fonts/families/SourceSansPro.json",
     Enum.FontWeight.Regular, Enum.FontStyle.Normal
@@ -129,7 +126,10 @@ function UI.animatePill(pill, knob, state)
     }):Play()
 end
 
--- ── Page + scroll frame ────────────────────────────────────
+-- ── Page frame + auto-layout ───────────────────────────────
+-- Pages use a scrolling frame with UIListLayout so rows stack
+-- automatically — no hardcoded yOffsets needed in Main.lua.
+
 function UI.makePage(name)
     local page = Instance.new("Frame")
     page.Name             = name
@@ -142,27 +142,28 @@ function UI.makePage(name)
     page.Parent           = PageFolder
     Instance.new("UICorner").Parent = page
 
+    -- Inner scroll frame so content can overflow without clipping dropdowns weirdly
     local scroll = Instance.new("ScrollingFrame")
-    scroll.Name                   = "Scroll"
-    scroll.BackgroundTransparency = 1
-    scroll.BorderSizePixel        = 0
-    scroll.Position               = UDim2.new(0, 0, 0, 48)
-    scroll.Size                   = UDim2.new(1, 0, 1, -48)
-    scroll.CanvasSize             = UDim2.new(0, 0, 0, 0)
-    scroll.AutomaticCanvasSize    = Enum.AutomaticSize.Y
-    scroll.ScrollBarThickness     = 0
-    scroll.ScrollingDirection     = Enum.ScrollingDirection.Y
-    scroll.ClipsDescendants       = true
-    scroll.Parent                 = page
+    scroll.Name                    = "Scroll"
+    scroll.BackgroundTransparency  = 1
+    scroll.BorderSizePixel         = 0
+    scroll.Position                = UDim2.new(0, 0, 0, 48)   -- leave room for page title
+    scroll.Size                    = UDim2.new(1, 0, 1, -48)
+    scroll.CanvasSize              = UDim2.new(0, 0, 0, 0)
+    scroll.AutomaticCanvasSize     = Enum.AutomaticSize.Y
+    scroll.ScrollBarThickness      = 0
+    scroll.ScrollingDirection      = Enum.ScrollingDirection.Y
+    scroll.ClipsDescendants        = true
+    scroll.Parent                  = page
 
     local layout = Instance.new("UIListLayout")
-    layout.SortOrder = Enum.SortOrder.LayoutOrder
-    layout.Padding   = UDim.new(0, 5)
-    layout.Parent    = scroll
+    layout.SortOrder     = Enum.SortOrder.LayoutOrder
+    layout.Padding       = UDim.new(0, 6)
+    layout.Parent        = scroll
 
     local pad = Instance.new("UIPadding")
-    pad.PaddingLeft   = UDim.new(0, 24)
-    pad.PaddingRight  = UDim.new(0, 24)
+    pad.PaddingLeft   = UDim.new(0, 28)
+    pad.PaddingRight  = UDim.new(0, 28)
     pad.PaddingTop    = UDim.new(0, 4)
     pad.PaddingBottom = UDim.new(0, 12)
     pad.Parent        = scroll
@@ -170,6 +171,7 @@ function UI.makePage(name)
     return page
 end
 
+-- Helper: get the scroll frame from a page
 local function getScroll(page)
     return page:FindFirstChild("Scroll")
 end
@@ -185,11 +187,11 @@ function UI.makePageTitle(page, text)
     lbl.TextColor3             = Color3.new(1, 1, 1)
     lbl.TextSize               = 20
     lbl.TextXAlignment         = Enum.TextXAlignment.Left
-    lbl.Parent                 = page
+    lbl.Parent                 = page   -- sits above the scroll area
 end
 
 -- ── Section label ──────────────────────────────────────────
-function UI.makeSectionLabel(page, _, text)
+function UI.makeSectionLabel(page, _, text)   -- yOffset ignored; layout handles it
     local scroll = getScroll(page)
     local lbl = Instance.new("TextLabel")
     lbl.BackgroundTransparency = 1
@@ -200,6 +202,7 @@ function UI.makeSectionLabel(page, _, text)
     lbl.TextSize               = 11
     lbl.TextXAlignment         = Enum.TextXAlignment.Left
     lbl.FontFace               = FONT_BOLD
+    lbl.LayoutOrder            = 0   -- caller should set this; default works for now
     lbl.Parent                 = scroll
     return lbl
 end
@@ -241,19 +244,20 @@ function UI.makeToggleRow(page, _, labelText, defaultState, onToggle)
     return row
 end
 
--- ── Sub-toggle row (animates height open/closed) ───────────
+-- ── Sub-toggle row ─────────────────────────────────────────
+-- Returns the row so caller can show/hide it.
 function UI.makeSubToggleRow(page, _, labelText, defaultState, onToggle)
     local scroll = getScroll(page)
-    local ROW_H  = 32
 
     local row = Instance.new("Frame")
     row.BackgroundColor3 = Color3.new(0.13, 0.13, 0.13)
     row.BorderSizePixel  = 0
-    row.Size             = UDim2.new(1, 0, 0, 0)   -- collapsed by default
-    row.ClipsDescendants = true
+    row.Size             = UDim2.new(1, 0, 0, 32)
+    row.Visible          = false    -- hidden by default; parent toggle shows it
     row.Parent           = scroll
     Instance.new("UICorner").Parent = row
 
+    -- Left accent bar
     local bar = Instance.new("Frame")
     bar.BackgroundColor3 = Color3.new(0, 0.835, 1)
     bar.BorderSizePixel  = 0
@@ -284,49 +288,35 @@ function UI.makeSubToggleRow(page, _, labelText, defaultState, onToggle)
         end
     end)
 
-    -- Proxy: .Visible = true/false triggers height tween
-    return setmetatable({}, {
-        __newindex = function(_, key, value)
-            if key == "Visible" then
-                if value then
-                    row.Visible = true
-                    TweenService:Create(row, TWEEN_IN, { Size = UDim2.new(1, 0, 0, ROW_H) }):Play()
-                else
-                    local t = TweenService:Create(row, TWEEN_OUT, { Size = UDim2.new(1, 0, 0, 0) })
-                    t:Play()
-                    t.Completed:Connect(function()
-                        if row.Size.Y.Offset == 0 then row.Visible = false end
-                    end)
-                end
-            else
-                row[key] = value
-            end
-        end,
-        __index = function(_, key)
-            if key == "Visible" then return row.Visible end
-            return row[key]
-        end
-    })
+    return row
 end
 
--- ── Dropdown row (animated expand) ─────────────────────────
+-- ── Dropdown row (animated expand below the row) ───────────
+-- The list expands the container's height and the UIListLayout
+-- pushes all subsequent rows down automatically.
 function UI.makeDropdownRow(page, _, labelText, options, defaultIndex, onChange)
-    local scroll    = getScroll(page)
+    local scroll = getScroll(page)
+
     local ITEM_H    = 28
     local CLOSED_H  = 36
     local OPEN_H    = CLOSED_H + #options * ITEM_H + 4
+    local TWEEN_IN  = TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+    local TWEEN_OUT = TweenInfo.new(0.15, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
 
+    -- Outer container whose height grows/shrinks
     local container = Instance.new("Frame")
     container.BackgroundColor3 = Color3.new(0.157, 0.157, 0.157)
     container.BorderSizePixel  = 0
     container.Size             = UDim2.new(1, 0, 0, CLOSED_H)
-    container.ClipsDescendants = true
+    container.ClipsDescendants = true   -- clips the list while animating
     container.Parent           = scroll
     Instance.new("UICorner").Parent = container
 
+    -- Header row (always visible)
     local header = Instance.new("Frame")
     header.BackgroundTransparency = 1
     header.BorderSizePixel        = 0
+    header.Position               = UDim2.new(0, 0, 0, 0)
     header.Size                   = UDim2.new(1, 0, 0, CLOSED_H)
     header.Parent                 = container
 
@@ -359,6 +349,7 @@ function UI.makeDropdownRow(page, _, labelText, options, defaultIndex, onChange)
     selBtn.Parent           = header
     Instance.new("UICorner").Parent = selBtn
 
+    -- List panel (sits below the header inside container)
     local listFrame = Instance.new("Frame")
     listFrame.BackgroundColor3 = Color3.new(0.14, 0.14, 0.14)
     listFrame.BorderSizePixel  = 0
@@ -393,10 +384,13 @@ function UI.makeDropdownRow(page, _, labelText, options, defaultIndex, onChange)
         optBtn.MouseLeave:Connect(function() optBtn.TextColor3 = Color3.new(0.75, 0.75, 0.75) end)
     end
 
+    -- Animate open/close by tweening the container height
     selBtn.MouseButton1Click:Connect(function()
         open = not open
         local targetH = open and OPEN_H or CLOSED_H
-        TweenService:Create(container, open and TWEEN_IN or TWEEN_OUT, { Size = UDim2.new(1, 0, 0, targetH) }):Play()
+        local info    = open and TWEEN_IN or TWEEN_OUT
+        TweenService:Create(container, info, { Size = UDim2.new(1, 0, 0, targetH) }):Play()
+        -- Rotate arrow
         selBtn.Text = options[selected] .. (open and "  ▴" or "  ▾")
     end)
 
@@ -509,7 +503,8 @@ function UI.makeSliderRow(page, _, labelText, minVal, maxVal, defaultVal, onChan
 
     local function updateSlider(inputX)
         local pct = math.clamp(
-            (inputX - trackBg.AbsolutePosition.X) / trackBg.AbsoluteSize.X, 0, 1
+            (inputX - trackBg.AbsolutePosition.X) / trackBg.AbsoluteSize.X,
+            0, 1
         )
         currentValue   = math.floor(minVal + pct * (maxVal - minVal))
         trackFill.Size = UDim2.new(pct, 0, 1, 0)
@@ -520,7 +515,8 @@ function UI.makeSliderRow(page, _, labelText, minVal, maxVal, defaultVal, onChan
 
     trackBg.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true; updateSlider(input.Position.X)
+            dragging = true
+            updateSlider(input.Position.X)
         end
     end)
     UserInputService.InputChanged:Connect(function(input)
@@ -552,7 +548,7 @@ function UI.makeActionBtn(page, _, labelText)
     return btn
 end
 
--- ── Status label ───────────────────────────────────────────
+-- ── Status label (plain, no background) ───────────────────
 function UI.makeStatusLabel(page)
     local scroll = getScroll(page)
     local lbl = Instance.new("TextLabel")
@@ -640,7 +636,7 @@ function UI.setupTabSwitcher(buttons, pages)
     return switchTo
 end
 
--- ── Draggable ──────────────────────────────────────────────
+-- ── Draggable MainFrame ────────────────────────────────────
 function UI.setupDrag()
     local dragging, dragInput, dragStart, startPos
 
@@ -688,9 +684,97 @@ function UI.setupWindowControls(onClose)
     end)
 end
 
+-- ── Toast system ───────────────────────────────────────────
+local TOAST_W      = 220
+local TOAST_H      = 40
+local TOAST_PAD    = 6
+local TOAST_LIFE   = 2.5
+local activeToasts = {}
+
+local toastContainer = Instance.new("Frame")
+toastContainer.Name              = "ToastContainer"
+toastContainer.BackgroundTransparency = 1
+toastContainer.BorderSizePixel   = 0
+toastContainer.AnchorPoint       = Vector2.new(1, 1)
+toastContainer.Position          = UDim2.new(1, -16, 1, -16)
+toastContainer.Size              = UDim2.new(0, TOAST_W, 1, -16)
+toastContainer.Parent            = ScreenGui
+
+local toastLayout = Instance.new("UIListLayout")
+toastLayout.SortOrder        = Enum.SortOrder.LayoutOrder
+toastLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+toastLayout.Padding          = UDim.new(0, TOAST_PAD)
+toastLayout.Parent           = toastContainer
+
+function UI.toast(label, state)
+    local frame = Instance.new("Frame")
+    frame.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+    frame.BorderSizePixel  = 0
+    frame.Size             = UDim2.new(1, 0, 0, TOAST_H)
+    frame.BackgroundTransparency = 1
+    frame.LayoutOrder      = -os.clock()
+    frame.Parent           = toastContainer
+    Instance.new("UICorner").Parent = frame
+
+    -- Accent bar (green = on, red = off)
+    local accent = Instance.new("Frame")
+    accent.BackgroundColor3 = state and Color3.fromRGB(0, 200, 80) or Color3.fromRGB(200, 50, 50)
+    accent.BorderSizePixel  = 0
+    accent.Size             = UDim2.new(0, 3, 1, -8)
+    accent.Position         = UDim2.new(0, 4, 0, 4)
+    accent.Parent           = frame
+    Instance.new("UICorner").Parent = accent
+
+    local lbl = Instance.new("TextLabel")
+    lbl.BackgroundTransparency = 1
+    lbl.BorderSizePixel        = 0
+    lbl.Position               = UDim2.new(0, 14, 0, 0)
+    lbl.Size                   = UDim2.new(1, -18, 0.5, 0)
+    lbl.Text                   = label
+    lbl.TextColor3             = Color3.new(1, 1, 1)
+    lbl.TextSize               = 12
+    lbl.TextXAlignment         = Enum.TextXAlignment.Left
+    lbl.FontFace               = FONT_BOLD
+    lbl.Parent                 = frame
+
+    local stateLbl = Instance.new("TextLabel")
+    stateLbl.BackgroundTransparency = 1
+    stateLbl.BorderSizePixel        = 0
+    stateLbl.Position               = UDim2.new(0, 14, 0.5, 0)
+    stateLbl.Size                   = UDim2.new(1, -18, 0.5, 0)
+    stateLbl.Text                   = state and "Enabled" or "Disabled"
+    stateLbl.TextColor3             = state and Color3.fromRGB(0, 200, 80) or Color3.fromRGB(200, 80, 80)
+    stateLbl.TextSize               = 11
+    stateLbl.TextXAlignment         = Enum.TextXAlignment.Left
+    stateLbl.FontFace               = FONT_REGULAR
+    stateLbl.Parent                 = frame
+
+    -- Slide in
+    TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+        BackgroundTransparency = 0.15
+    }):Play()
+
+    table.insert(activeToasts, frame)
+
+    task.delay(TOAST_LIFE, function()
+        -- Fade out
+        local t = TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 0, 0)
+        })
+        t:Play()
+        t.Completed:Connect(function()
+            frame:Destroy()
+            for i, f in ipairs(activeToasts) do
+                if f == frame then table.remove(activeToasts, i) break end
+            end
+        end)
+    end)
+end
+
 -- ── Mount ──────────────────────────────────────────────────
 function UI.mount()
-    ScreenGui.Parent = game:GetService("CoreGui")
+    ScreenGui.Parent = PlayerGui
 end
 
 return UI
