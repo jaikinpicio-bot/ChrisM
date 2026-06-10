@@ -20,6 +20,10 @@ local PILL_H    = 17
 local KNOB_SIZE = 12
 local KNOB_PAD  = 2
 
+local PANEL_W   = 720
+local PANEL_H   = 500
+local BAR_H     = 38  -- collapsed title bar height
+
 local C = {
     bg0        = Color3.fromRGB(13,  13,  16),
     bg1        = Color3.fromRGB(20,  20,  25),
@@ -61,13 +65,16 @@ ScreenGui.DisplayOrder   = 10
 -- Main panel
 local Panel = Instance.new("Frame")
 Panel.Name             = "Panel"
-Panel.Size             = UDim2.new(0, 720, 0, 500)
-Panel.Position         = UDim2.new(0.5, -360, 0.5, -250)
+Panel.Size             = UDim2.new(0, PANEL_W, 0, PANEL_H)
+Panel.Position         = UDim2.new(0.5, -PANEL_W/2, 0.5, -PANEL_H/2)
 Panel.BackgroundColor3 = C.bg1
 Panel.BorderSizePixel  = 0
+Panel.ClipsDescendants = true
 Panel.Parent           = ScreenGui
 local _pc = Instance.new("UICorner"); _pc.CornerRadius = UDim.new(0,10); _pc.Parent = Panel
 local _ps = Instance.new("UIStroke"); _ps.Color = C.border; _ps.Thickness = 1; _ps.Parent = Panel
+
+local minimized = false
 
 -- ══════════════════════════════════════════
 -- HELPERS
@@ -119,7 +126,6 @@ Sidebar.BackgroundColor3 = C.bg0
 Sidebar.BorderSizePixel  = 0
 Sidebar.Parent           = Panel
 local _sl = Instance.new("UICorner"); _sl.CornerRadius = UDim.new(0,10); _sl.Parent = Sidebar
--- Clip the right side corners by overlapping a frame
 local _sclip = Instance.new("Frame")
 _sclip.Size             = UDim2.new(0, 10, 1, 0)
 _sclip.Position         = UDim2.new(1, -10, 0, 0)
@@ -177,7 +183,6 @@ label(BrandHeader, {
     TextXAlignment = Enum.TextXAlignment.Left,
 })
 
--- Divider
 local _bDiv = Instance.new("Frame")
 _bDiv.Size             = UDim2.new(1, 0, 0, 1)
 _bDiv.Position         = UDim2.new(0, 0, 0, 56)
@@ -207,7 +212,6 @@ NavPad.PaddingTop    = UDim.new(0, 6)
 NavPad.PaddingBottom = UDim.new(0, 6)
 NavPad.Parent        = NavScroll
 
--- Section label helper
 local function navSection(text, order)
     local f = frame(NavScroll, {
         Size         = UDim2.new(1, 0, 0, 22),
@@ -224,9 +228,8 @@ local function navSection(text, order)
     })
 end
 
--- Nav item helper
 local navItems    = {}
-local navItemRefs = {}  -- [pageName] = button frame
+local navItemRefs = {}
 
 local function navItem(pageName, displayText, iconCode, order)
     local btn = Instance.new("TextButton")
@@ -240,7 +243,6 @@ local function navItem(pageName, displayText, iconCode, order)
     btn.Parent           = NavScroll
     corner(btn, 5)
 
-    -- Active indicator bar
     local bar = Instance.new("Frame")
     bar.Size             = UDim2.new(0, 2, 0.6, 0)
     bar.Position         = UDim2.new(0, 0, 0.2, 0)
@@ -250,7 +252,6 @@ local function navItem(pageName, displayText, iconCode, order)
     bar.Parent           = btn
     corner(bar, 2)
 
-    -- Icon
     label(btn, {
         Position = UDim2.new(0, 10, 0, 0),
         Size     = UDim2.new(0, 18, 1, 0),
@@ -261,7 +262,6 @@ local function navItem(pageName, displayText, iconCode, order)
         Name     = "Icon",
     })
 
-    -- Label
     local lbl = label(btn, {
         Position = UDim2.new(0, 30, 0, 0),
         Size     = UDim2.new(1, -34, 1, 0),
@@ -278,7 +278,6 @@ local function navItem(pageName, displayText, iconCode, order)
     return btn
 end
 
--- Build nav
 navSection("AIMBOT", 1)
 navItem("combat",   "Rage",       "⊕", 2)
 navItem("legit",    "Legit",      "◎", 3)
@@ -321,7 +320,6 @@ FooterBtn.MouseLeave:Connect(function()
     tween(FooterBtn, {BackgroundTransparency = 1})
 end)
 
--- Avatar circle
 local Avatar = Instance.new("Frame")
 Avatar.Size             = UDim2.new(0, 28, 0, 28)
 Avatar.Position         = UDim2.new(0, 6, 0.5, -14)
@@ -350,7 +348,6 @@ local UserNameLbl = label(FooterBtn, {
     Name           = "UserName",
 })
 
--- Status dot
 local StatusDot = Instance.new("Frame")
 StatusDot.Size             = UDim2.new(0, 5, 0, 5)
 StatusDot.BackgroundColor3 = C.green
@@ -368,12 +365,10 @@ label(FooterBtn, {
     TextXAlignment = Enum.TextXAlignment.Left,
 })
 
--- Populate username + avatar initials
 task.spawn(function()
     local name = LocalPlayer.Name
     UserNameLbl.Text  = name
     AvatarLbl.Text    = string.upper(string.sub(name, 1, 2))
-    -- Try to load avatar thumbnail
     local ok, img = pcall(function()
         return Players:GetUserThumbnailAsync(
             LocalPlayer.UserId,
@@ -403,13 +398,26 @@ Content.BackgroundTransparency = 1
 Content.BorderSizePixel  = 0
 Content.Parent           = Panel
 
--- Top bar
+-- Top bar (always visible — doubles as drag handle + title when minimized)
 local TopBar = Instance.new("Frame")
 TopBar.Name             = "TopBar"
-TopBar.Size             = UDim2.new(1, 0, 0, 38)
+TopBar.Size             = UDim2.new(1, 0, 0, BAR_H)
 TopBar.BackgroundTransparency = 1
 TopBar.BorderSizePixel  = 0
 TopBar.Parent           = Content
+
+-- Title label shown when minimized
+local MinTitle = label(TopBar, {
+    Position       = UDim2.new(0, 108, 0, 0),
+    Size           = UDim2.new(1, -200, 1, 0),
+    Text           = "ChrisM Hub",
+    TextColor3     = C.text2,
+    TextSize       = 11,
+    FontFace       = FONT_BOLD,
+    TextXAlignment = Enum.TextXAlignment.Center,
+    Visible        = false,
+    Name           = "MinTitle",
+})
 
 -- Config button
 local ConfigBtn = Instance.new("TextButton")
@@ -454,7 +462,7 @@ CloseBtn.MouseLeave:Connect(function()
     tween(CloseBtn, {BackgroundColor3 = C.bg3, TextColor3 = C.text2})
 end)
 
--- Min button
+-- Minimize button
 local MinBtn = Instance.new("TextButton")
 MinBtn.Size             = UDim2.new(0, 24, 0, 24)
 MinBtn.Position         = UDim2.new(1, -60, 0.5, -12)
@@ -471,19 +479,20 @@ stroke(MinBtn, C.border2)
 MinBtn.MouseEnter:Connect(function() tween(MinBtn, {BackgroundColor3 = C.bg4}) end)
 MinBtn.MouseLeave:Connect(function() tween(MinBtn, {BackgroundColor3 = C.bg3}) end)
 
--- Topbar divider
-local _tbDiv = Instance.new("Frame")
-_tbDiv.Size             = UDim2.new(1, 0, 0, 1)
-_tbDiv.Position         = UDim2.new(0, 0, 1, -1)
-_tbDiv.BackgroundColor3 = C.border
-_tbDiv.BorderSizePixel  = 0
-_tbDiv.Parent           = TopBar
+-- Topbar divider (hidden when minimized)
+local TopBarDiv = Instance.new("Frame")
+TopBarDiv.Name             = "TopBarDiv"
+TopBarDiv.Size             = UDim2.new(1, 0, 0, 1)
+TopBarDiv.Position         = UDim2.new(0, 0, 1, -1)
+TopBarDiv.BackgroundColor3 = C.border
+TopBarDiv.BorderSizePixel  = 0
+TopBarDiv.Parent           = TopBar
 
 -- Page container
 local PageContainer = Instance.new("Frame")
 PageContainer.Name             = "PageContainer"
-PageContainer.Size             = UDim2.new(1, 0, 1, -38)
-PageContainer.Position         = UDim2.new(0, 0, 0, 38)
+PageContainer.Size             = UDim2.new(1, 0, 1, -BAR_H)
+PageContainer.Position         = UDim2.new(0, 0, 0, BAR_H)
 PageContainer.BackgroundTransparency = 1
 PageContainer.BorderSizePixel  = 0
 PageContainer.ClipsDescendants = true
@@ -503,7 +512,6 @@ local function makePage(name)
     pg.Visible          = false
     pg.Parent           = PageContainer
 
-    -- Two columns
     local colL = Instance.new("ScrollingFrame")
     colL.Name                  = "ColL"
     colL.Size                  = UDim2.new(0.5, -8, 1, -8)
@@ -548,7 +556,6 @@ end
 -- ROW COMPONENTS
 -- ══════════════════════════════════════════
 
--- Section header
 local function sectionHeader(col, text)
     local f = Instance.new("Frame")
     f.Size             = UDim2.new(1, 0, 0, 26)
@@ -575,7 +582,6 @@ local function sectionHeader(col, text)
     return f
 end
 
--- Pill toggle
 local function makePill(parent, defaultOn)
     local pill = Instance.new("Frame")
     pill.Size             = UDim2.new(0, PILL_W, 0, PILL_H)
@@ -612,7 +618,6 @@ local function animatePill(pill, knob, state)
     })
 end
 
--- Row base
 local function baseRow(col, height)
     local r = Instance.new("Frame")
     r.Size             = UDim2.new(1, 0, 0, height or 28)
@@ -632,7 +637,6 @@ local function baseRow(col, height)
     return r
 end
 
--- Toggle row
 function UI.makeToggleRow(col, labelText, defaultOn, onToggle)
     local r = baseRow(col)
     label(r, {
@@ -658,13 +662,11 @@ function UI.makeToggleRow(col, labelText, defaultOn, onToggle)
     return r
 end
 
--- Sub-toggle row (indented, for ESP sub-options)
 function UI.makeSubToggleRow(col, labelText, defaultOn, onToggle)
     local r = baseRow(col, 26)
     r.BackgroundColor3 = C.bg2
     r.BackgroundTransparency = 0.5
 
-    -- Accent bar
     local bar = Instance.new("Frame")
     bar.Size             = UDim2.new(0, 2, 0.6, 0)
     bar.Position         = UDim2.new(0, 0, 0.2, 0)
@@ -695,7 +697,6 @@ function UI.makeSubToggleRow(col, labelText, defaultOn, onToggle)
     pill.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             state = not state
-            -- small pill anim
             tween(pill, {BackgroundColor3 = state and C.pill_on or C.pill_off})
             tween(knob, {
                 BackgroundColor3 = state and C.knob_on or C.knob_off,
@@ -709,7 +710,6 @@ function UI.makeSubToggleRow(col, labelText, defaultOn, onToggle)
     return r
 end
 
--- Slider row
 function UI.makeSliderRow(col, labelText, minVal, maxVal, defaultVal, onChanged)
     local r = baseRow(col, 42)
 
@@ -733,7 +733,6 @@ function UI.makeSliderRow(col, labelText, minVal, maxVal, defaultVal, onChanged)
         TextXAlignment = Enum.TextXAlignment.Right,
     })
 
-    -- Track
     local trackBg = Instance.new("Frame")
     trackBg.BackgroundColor3 = C.bg4
     trackBg.BorderSizePixel  = 0
@@ -749,7 +748,6 @@ function UI.makeSliderRow(col, labelText, minVal, maxVal, defaultVal, onChanged)
     trackFill.Parent           = trackBg
     corner(trackFill, 2)
 
-    -- Gradient on fill
     local grad = Instance.new("UIGradient")
     grad.Color = ColorSequence.new{
         ColorSequenceKeypoint.new(0, C.accent),
@@ -801,7 +799,6 @@ function UI.makeSliderRow(col, labelText, minVal, maxVal, defaultVal, onChanged)
     return r, function() return currentVal end
 end
 
--- Dropdown row
 function UI.makeDropdownRow(col, labelText, options, defaultIndex, onChanged)
     local ITEM_H   = 24
     local CLOSED_H = 28
@@ -861,7 +858,6 @@ function UI.makeDropdownRow(col, labelText, options, defaultIndex, onChanged)
     selBtn.MouseEnter:Connect(function() tween(selBtn, {BackgroundColor3 = C.bg4}) end)
     selBtn.MouseLeave:Connect(function() tween(selBtn, {BackgroundColor3 = C.bg3}) end)
 
-    -- List
     local listFrame = Instance.new("Frame")
     listFrame.Size             = UDim2.new(1, 0, 0, #options * ITEM_H + 4)
     listFrame.Position         = UDim2.new(0, 0, 0, CLOSED_H)
@@ -904,18 +900,17 @@ function UI.makeDropdownRow(col, labelText, options, defaultIndex, onChanged)
         end)
 
         optBtn.MouseButton1Click:Connect(function()
-            -- Reset all
             for _, child in ipairs(listFrame:GetChildren()) do
                 if child:IsA("TextButton") then
                     child.TextColor3 = C.text1
                     child.FontFace   = FONT_REG
                 end
             end
-            selected       = i
+            selected          = i
             optBtn.TextColor3 = C.accent2
             optBtn.FontFace   = FONT_BOLD
-            selBtn.Text    = opt .. "  ▾"
-            open           = false
+            selBtn.Text       = opt .. "  ▾"
+            open              = false
             TweenService:Create(container, TW_FAST, {Size = UDim2.new(1, 0, 0, CLOSED_H)}):Play()
             if onChanged then onChanged(opt) end
         end)
@@ -931,7 +926,6 @@ function UI.makeDropdownRow(col, labelText, options, defaultIndex, onChanged)
     return container
 end
 
--- Input row
 function UI.makeInputRow(col, labelText, placeholder)
     local r = baseRow(col, 40)
 
@@ -961,13 +955,12 @@ function UI.makeInputRow(col, labelText, placeholder)
     corner(box, 4)
 
     local bStroke = stroke(box, C.border, 1)
-    box.Focused:Connect(function()  tween(bStroke, {Color = C.accent}) end)
+    box.Focused:Connect(function()   tween(bStroke, {Color = C.accent}) end)
     box.FocusLost:Connect(function() tween(bStroke, {Color = C.border}) end)
 
     return r, function() return box.Text end
 end
 
--- Action button
 function UI.makeActionBtn(col, text, color)
     local btn = Instance.new("TextButton")
     btn.Size             = UDim2.new(1, 0, 0, 30)
@@ -996,7 +989,6 @@ function UI.makeActionBtn(col, text, color)
     return btn
 end
 
--- Status label
 function UI.makeStatusLabel(col)
     local r = frame(col, {
         Size = UDim2.new(1, 0, 0, 20),
@@ -1013,12 +1005,10 @@ function UI.makeStatusLabel(col)
     return lbl
 end
 
--- Section label (flat, inside column)
 function UI.makeSectionLabel(col, text)
     return sectionHeader(col, text)
 end
 
--- Spacer
 function UI.makeSpacer(col, height)
     local f = frame(col, {Size = UDim2.new(1, 0, 0, height or 4)})
     return f
@@ -1043,16 +1033,13 @@ end
 local currentPage = nil
 
 function UI.switchTo(pageName)
-    -- Hide all pages
     for _, pg in pairs(pages) do
         pg.frame.Visible = false
     end
-    -- Show target
     local pg = pages[pageName]
     if pg then pg.frame.Visible = true end
     currentPage = pageName
 
-    -- Update nav highlight
     for _, item in ipairs(navItems) do
         local active = (item.page == pageName)
         item.bar.Visible = active
@@ -1082,12 +1069,43 @@ function UI.setupNavigation()
 end
 
 -- ══════════════════════════════════════════
+-- MINIMIZE  (collapse to title bar)
+-- ══════════════════════════════════════════
+local function setMinimized(state)
+    minimized = state
+    if state then
+        -- Collapse panel to just the bar height, hide body content
+        TweenService:Create(Panel, TW_MED, {
+            Size = UDim2.new(0, PANEL_W, 0, BAR_H)
+        }):Play()
+        -- Hide sidebar content below brand header
+        Sidebar.Visible    = false
+        PageContainer.Visible = false
+        TopBarDiv.Visible  = false
+        MinTitle.Visible   = true
+        ConfigBtn.Visible  = false
+        -- Change min button to restore symbol
+        MinBtn.Text = "□"
+    else
+        -- Restore full size
+        TweenService:Create(Panel, TW_MED, {
+            Size = UDim2.new(0, PANEL_W, 0, PANEL_H)
+        }):Play()
+        Sidebar.Visible    = true
+        PageContainer.Visible = true
+        TopBarDiv.Visible  = true
+        MinTitle.Visible   = false
+        ConfigBtn.Visible  = true
+        MinBtn.Text = "—"
+    end
+end
+
+-- ══════════════════════════════════════════
 -- DRAGGABLE
 -- ══════════════════════════════════════════
 function UI.setupDrag()
     local dragging, dragStart, startPos, dragInput
 
-    -- Drag from topbar or brand header
     local function startDrag(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             dragging  = true
@@ -1101,6 +1119,7 @@ function UI.setupDrag()
         end
     end
 
+    -- Drag from topbar (works both minimized and expanded)
     TopBar.InputBegan:Connect(startDrag)
     BrandHeader.InputBegan:Connect(startDrag)
 
@@ -1123,6 +1142,7 @@ end
 -- WINDOW CONTROLS
 -- ══════════════════════════════════════════
 function UI.setupWindowControls(onClose)
+    -- Close
     CloseBtn.MouseButton1Click:Connect(function()
         if onClose then pcall(onClose) end
         TweenService:Create(Panel, TweenInfo.new(0.18), {
@@ -1132,13 +1152,26 @@ function UI.setupWindowControls(onClose)
         task.delay(0.25, function() ScreenGui:Destroy() end)
     end)
 
+    -- Minimize: collapse to draggable title bar
     MinBtn.MouseButton1Click:Connect(function()
-        Panel.Visible = false
+        setMinimized(not minimized)
     end)
 
+    -- Double-click title bar to restore when minimized
+    TopBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 and minimized then
+            setMinimized(false)
+        end
+    end)
+
+    -- Keybind: ] to toggle visibility (both minimized and hidden states)
     UserInputService.InputBegan:Connect(function(input, gp)
         if not gp and input.KeyCode == Enum.KeyCode.RightBracket then
-            Panel.Visible = not Panel.Visible
+            if minimized then
+                setMinimized(false)
+            else
+                Panel.Visible = not Panel.Visible
+            end
         end
     end)
 end
@@ -1172,7 +1205,6 @@ function UI.toast(featureName, state)
     corner(f, 6)
     stroke(f, C.border2)
 
-    -- Accent bar
     local accent = Instance.new("Frame")
     accent.BackgroundColor3 = state and C.green or C.red
     accent.BorderSizePixel  = 0
@@ -1200,7 +1232,6 @@ function UI.toast(featureName, state)
         TextXAlignment = Enum.TextXAlignment.Left,
     })
 
-    -- Slide in
     f.BackgroundTransparency = 1
     tween(f, {BackgroundTransparency = 0.1}, TW_MED)
 
@@ -1216,8 +1247,5 @@ end
 function UI.mount()
     ScreenGui.Parent = PlayerGui
 end
-
--- Expose for Main.lua
-UI.makePage    = function(name) return makePage(name) end
 
 return UI
