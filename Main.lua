@@ -30,29 +30,63 @@ ItemESP:Init()
 EventESP:Init()
 
 -- ══════════════════════════════════════════
--- VISUALS PAGE
--- Layout:
---   World (Fullbright) at top — quick toggle, always useful
---   Player ESP — main combat overlay
---   Item ESP   — gear on players
---   Event ESP  — map events
+-- COMBAT PAGE  (nav key: "combat")
 -- ══════════════════════════════════════════
-local VisualsPage = UI.makePage("Visuals")
-UI.makePageTitle(VisualsPage, "Visuals")
+UI.makePage("combat")
+local cL = UI.getCol("combat", "left")
+local cR = UI.getCol("combat", "right")
 
--- ── World ─────────────────────────────────
-UI.makeSectionLabel(VisualsPage, 0, "— World")
-UI.makeToggleRow(VisualsPage, 0, "Fullbright", false, function(s)
-    Fullbright:SetEnabled(s)
-    UI.toast("Fullbright", s)
+-- Left column
+UI.makeSectionLabel(cL, "Aimbot")
+UI.makeToggleRow(cL, "Aimbot", false, function(s)
+    Aimbot:SetEnabled(s)
+    UI.toast("Aimbot", s)
+end)
+UI.makeToggleRow(cL, "Wall Check", true, function(s)
+    Aimbot.WallCheck = s
+    UI.toast("Wall Check", s)
 end)
 
--- ── Player ESP ────────────────────────────
-UI.makeSectionLabel(VisualsPage, 0, "— Player ESP")
+UI.makeSectionLabel(cL, "Targeting")
+UI.makeDropdownRow(cL, "Target Bone", {
+    "Head", "HumanoidRootPart", "UpperTorso", "Torso", "RightUpperArm", "LeftUpperArm"
+}, 1, function(val)
+    Aimbot.TargetBone = val
+end)
+UI.makeSliderRow(cL, "FOV Radius (px)", 50, 400, 150, function(val)
+    Aimbot.FOV = val
+    local c = Aimbot:GetOverlayCircle()
+    if c then c.Radius = val end
+end)
+
+-- Right column
+UI.makeSectionLabel(cR, "Behaviour")
+UI.makeSliderRow(cR, "Smoothness", 1, 20, 3, function(val)
+    Aimbot.Smooth = val
+end)
+UI.makeSliderRow(cR, "Bullet Velocity (studs/s)", 1, 4625, 800, function(val)
+    Aimbot.BulletVelocity = val
+end)
+
+-- ══════════════════════════════════════════
+-- LEGIT PAGE  (nav key: "legit")
+-- ══════════════════════════════════════════
+UI.makePage("legit")
+-- (reserved for future legit aimbot options)
+
+-- ══════════════════════════════════════════
+-- VISUALS PAGE  (nav key: "visuals")
+-- ══════════════════════════════════════════
+UI.makePage("visuals")
+local vL = UI.getCol("visuals", "left")
+local vR = UI.getCol("visuals", "right")
+
+-- Left column — Player ESP
+UI.makeSectionLabel(vL, "Player ESP")
 
 local subChams, subHealth, subBoxes, subNames, subWeapon, subSkeleton, subZombies
 
-UI.makeToggleRow(VisualsPage, 0, "Player ESP", false, function(s)
+UI.makeToggleRow(vL, "Player ESP", false, function(s)
     ESP:SetEnabled(s)
     subChams.Visible    = s
     subHealth.Visible   = s
@@ -64,131 +98,93 @@ UI.makeToggleRow(VisualsPage, 0, "Player ESP", false, function(s)
     UI.toast("Player ESP", s)
 end)
 
--- Most-used first, secondary options after
-subNames    = UI.makeSubToggleRow(VisualsPage, 0, "Names",        true,  function(s) ESP.Names = s      UI.toast("Names", s)        end)
-subBoxes    = UI.makeSubToggleRow(VisualsPage, 0, "Boxes",        true,  function(s) ESP.Boxes = s      UI.toast("Boxes", s)        end)
-subChams    = UI.makeSubToggleRow(VisualsPage, 0, "Chams",        false, function(s) ESP:SetChams(s)    UI.toast("Chams", s)        end)
-subHealth   = UI.makeSubToggleRow(VisualsPage, 0, "Health Bars",  false, function(s) ESP.HealthBars = s UI.toast("Health Bars", s)  end)
-subWeapon   = UI.makeSubToggleRow(VisualsPage, 0, "Weapon Label", true,  function(s) ESP.WeaponText = s UI.toast("Weapon Label", s) end)
-subSkeleton = UI.makeSubToggleRow(VisualsPage, 0, "Skeleton",     false, function(s) ESP:SetSkeleton(s) UI.toast("Skeleton", s)     end)
-subZombies  = UI.makeSubToggleRow(VisualsPage, 0, "Zombies",      false, function(s) ESP:SetZombies(s)  UI.toast("Zombies", s)      end)
+subNames    = UI.makeSubToggleRow(vL, "Names",        true,  function(s) ESP.Names = s       UI.toast("Names", s)        end)
+subBoxes    = UI.makeSubToggleRow(vL, "Boxes",        true,  function(s) ESP.Boxes = s       UI.toast("Boxes", s)        end)
+subChams    = UI.makeSubToggleRow(vL, "Chams",        false, function(s) ESP:SetChams(s)     UI.toast("Chams", s)        end)
+subHealth   = UI.makeSubToggleRow(vL, "Health Bars",  false, function(s) ESP.HealthBars = s  UI.toast("Health Bars", s)  end)
+subWeapon   = UI.makeSubToggleRow(vL, "Weapon Label", true,  function(s) ESP.WeaponText = s  UI.toast("Weapon Label", s) end)
+subSkeleton = UI.makeSubToggleRow(vL, "Skeleton",     false, function(s) ESP:SetSkeleton(s)  UI.toast("Skeleton", s)     end)
+subZombies  = UI.makeSubToggleRow(vL, "Zombies",      false, function(s) ESP:SetZombies(s)   UI.toast("Zombies", s)      end)
 
-UI.makeSliderRow(VisualsPage, 0, "Distance (m)", 10, 5000, 500, function(val)
+UI.makeSliderRow(vL, "ESP Distance (m)", 10, 5000, 500, function(val)
     ESP.MaxDistance = val
 end)
 
--- ── Item ESP ──────────────────────────────
-UI.makeSectionLabel(VisualsPage, 0, "— Item ESP")
+-- Right column — Item ESP + Event ESP
+UI.makeSectionLabel(vR, "Item ESP")
 
 local subAccessories
 
-UI.makeToggleRow(VisualsPage, 0, "Item ESP", false, function(s)
+UI.makeToggleRow(vR, "Item ESP", false, function(s)
     ItemESP:SetEnabled(s)
     subAccessories.Visible = s
     UI.toast("Item ESP", s)
 end)
 
-subAccessories = UI.makeSubToggleRow(VisualsPage, 0, "Accessories", true, function(s)
+subAccessories = UI.makeSubToggleRow(vR, "Accessories", true, function(s)
     ItemESP:SetAccessories(s)
     UI.toast("Accessories", s)
 end)
 
-UI.makeSliderRow(VisualsPage, 0, "Distance (m)", 50, 5000, 500, function(val)
+UI.makeSliderRow(vR, "Item Distance (m)", 50, 5000, 500, function(val)
     ItemESP.MaxDistance = val
 end)
 
--- ── Event ESP ─────────────────────────────
-UI.makeSectionLabel(VisualsPage, 0, "— Event ESP")
+UI.makeSpacer(vR, 6)
+UI.makeSectionLabel(vR, "Event ESP")
 
-UI.makeToggleRow(VisualsPage, 0, "Event ESP", false, function(s)
+UI.makeToggleRow(vR, "Event ESP", false, function(s)
     EventESP:SetEnabled(s)
     UI.toast("Event ESP", s)
 end)
 
-UI.makeSliderRow(VisualsPage, 0, "Distance (m)", 50, 5000, 1000, function(val)
+UI.makeSliderRow(vR, "Event Distance (m)", 50, 5000, 1000, function(val)
     EventESP.MaxDistance = val
 end)
 
 -- ══════════════════════════════════════════
--- COMBAT PAGE
--- Layout:
---   Aimbot toggle
---   Wall Check
---   ── Targeting ──
---   Target Bone dropdown
---   FOV slider
---   ── Behaviour ──
---   Smoothness slider
---   Bullet Velocity slider
+-- WORLD PAGE  (nav key: "world")
 -- ══════════════════════════════════════════
-local CombatPage = UI.makePage("Combat")
-UI.makePageTitle(CombatPage, "Combat")
+UI.makePage("world")
+local wL = UI.getCol("world", "left")
 
-UI.makeToggleRow(CombatPage, 0, "Aimbot", false, function(s)
-    Aimbot:SetEnabled(s)
-    UI.toast("Aimbot", s)
-end)
-UI.makeToggleRow(CombatPage, 0, "Wall Check", true, function(s)
-    Aimbot.WallCheck = s
-    UI.toast("Wall Check", s)
-end)
-
-UI.makeSectionLabel(CombatPage, 0, "— Targeting")
-UI.makeDropdownRow(CombatPage, 0, "Target Bone", {
-    "Head", "HumanoidRootPart", "UpperTorso", "Torso", "RightUpperArm", "LeftUpperArm"
-}, 1, function(val)
-    Aimbot.TargetBone = val
-end)
-UI.makeSliderRow(CombatPage, 0, "FOV Radius (px)", 50, 400, 150, function(val)
-    Aimbot.FOV = val
-    local c = Aimbot:GetOverlayCircle(); if c then c.Radius = val end
-end)
-
-UI.makeSectionLabel(CombatPage, 0, "— Behaviour")
-UI.makeSliderRow(CombatPage, 0, "Smoothness", 1, 20, 3, function(val)
-    Aimbot.Smooth = val
-end)
-UI.makeSliderRow(CombatPage, 0, "Bullet Velocity (studs/s)", 1, 4625, 800, function(val)
-    Aimbot.BulletVelocity = val
+UI.makeSectionLabel(wL, "Lighting")
+UI.makeToggleRow(wL, "Fullbright", false, function(s)
+    Fullbright:SetEnabled(s)
+    UI.toast("Fullbright", s)
 end)
 
 -- ══════════════════════════════════════════
--- PLAYER PAGE (Teleport)
--- Layout:
---   Target input
---   Behind Offset slider
---   Status label
---   ── Actions ──
---   One-Time TP
---   Loop Tracking
---   Stop
+-- MOVEMENT PAGE  (nav key: "movement")
 -- ══════════════════════════════════════════
-local PlayerPage = UI.makePage("Player")
-UI.makePageTitle(PlayerPage, "Player")
+UI.makePage("movement")
+local mL = UI.getCol("movement", "left")
 
-UI.makeSectionLabel(PlayerPage, 0, "— Teleport")
-local usernameInput = UI.makeInputRow(PlayerPage, 0, "Target", "Enter username...")
-UI.makeSliderRow(PlayerPage, 0, "Behind Offset (studs)", 1, 30, 15, function(val)
+UI.makeSectionLabel(mL, "Teleport")
+
+local _, getUsername = UI.makeInputRow(mL, "Target Username", "Enter username...")
+
+UI.makeSliderRow(mL, "Behind Offset (studs)", 1, 30, 15, function(val)
     Teleport.BehindOffset = val
 end)
 
-local statusLbl = UI.makeStatusLabel(PlayerPage)
+local statusLbl = UI.makeStatusLabel(mL)
 Teleport:OnStatusChange(function(msg, color)
     statusLbl.Text       = "Status: " .. msg
     statusLbl.TextColor3 = color
 end)
 
-UI.makeSectionLabel(PlayerPage, 0, "— Actions")
-local instantTPBtn = UI.makeActionBtn(PlayerPage, 0, "⚡ One-Time Teleport")
-local startTPBtn   = UI.makeActionBtn(PlayerPage, 0, "🔄 Start Loop Tracking")
-startTPBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-local stopTPBtn    = UI.makeActionBtn(PlayerPage, 0, "⏹ Stop Tracking")
-stopTPBtn.BackgroundColor3 = Color3.new(0.18, 0.18, 0.18)
-stopTPBtn.TextColor3       = Color3.new(0.5, 0.5, 0.5)
+UI.makeSpacer(mL, 4)
+UI.makeSectionLabel(mL, "Actions")
+
+local instantTPBtn = UI.makeActionBtn(mL, "⚡ One-Time Teleport")
+local startTPBtn   = UI.makeActionBtn(mL, "🔄 Start Loop Tracking", Color3.fromRGB(180, 40, 40))
+local stopTPBtn    = UI.makeActionBtn(mL, "⏹ Stop Tracking",       Color3.fromRGB(46, 46, 46))
+stopTPBtn.TextColor3 = Color3.fromRGB(128, 128, 128)
 
 instantTPBtn.MouseButton1Click:Connect(function()
     instantTPBtn.Text = "⏳ Teleporting..."
-    Teleport:Once(usernameInput.getValue(), function(success)
+    Teleport:Once(getUsername(), function(success)
         if not success then instantTPBtn.Text = "❌ Not Found" end
         task.delay(1.5, function() instantTPBtn.Text = "⚡ One-Time Teleport" end)
     end)
@@ -197,11 +193,11 @@ end)
 startTPBtn.MouseButton1Click:Connect(function()
     if Teleport.IsTracking then return end
     Teleport:StartTracking(
-        usernameInput.getValue(),
+        getUsername(),
         function(_target)
             startTPBtn.Text             = "🟢 Tracking..."
             startTPBtn.BackgroundColor3 = Color3.fromRGB(40, 160, 40)
-            stopTPBtn.BackgroundColor3  = Color3.new(0, 0.835, 1)
+            stopTPBtn.BackgroundColor3  = Color3.fromRGB(0, 213, 255)
             stopTPBtn.TextColor3        = Color3.new(1, 1, 1)
         end,
         function()
@@ -219,22 +215,21 @@ stopTPBtn.MouseButton1Click:Connect(function()
     Teleport:StopTracking()
     startTPBtn.Text             = "🔄 Start Loop Tracking"
     startTPBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-    stopTPBtn.BackgroundColor3  = Color3.new(0.18, 0.18, 0.18)
-    stopTPBtn.TextColor3        = Color3.new(0.5, 0.5, 0.5)
+    stopTPBtn.BackgroundColor3  = Color3.fromRGB(46, 46, 46)
+    stopTPBtn.TextColor3        = Color3.fromRGB(128, 128, 128)
 end)
 
 -- ══════════════════════════════════════════
--- SIDEBAR + TAB SWITCHER
+-- MISC PAGE  (nav key: "misc")
 -- ══════════════════════════════════════════
-local btnVisuals = UI.makeSideBtn("Visuals", 0.126, "Visuals",  "6523858394")
-local btnCombat  = UI.makeSideBtn("Combat",  0.233, "Combat",   "13050670424")
-local btnPlayer  = UI.makeSideBtn("Player",  0.34,  "Player",   "16181398272")
+UI.makePage("misc")
+-- (reserved for future misc options)
 
-local switchTo = UI.setupTabSwitcher(
-    { btnVisuals, btnCombat, btnPlayer },
-    { Visuals = VisualsPage, Combat = CombatPage, Player = PlayerPage }
-)
-switchTo(btnVisuals)
+-- ══════════════════════════════════════════
+-- NAVIGATION + DRAG + WINDOW CONTROLS
+-- ══════════════════════════════════════════
+UI.setupNavigation()
+UI.switchTo("combat")
 
 UI.setupDrag()
 UI.setupWindowControls(function()
