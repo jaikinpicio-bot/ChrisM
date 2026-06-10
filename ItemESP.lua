@@ -7,20 +7,34 @@ local LocalPlayer       = Players.LocalPlayer
 
 local ItemESP = {}
 
-ItemESP.Enabled     = true -- Default to true so it hooks structures properly on start
+ItemESP.Enabled     = true
 ItemESP.Accessories = true
 ItemESP.MaxDistance = 500
 
 local ESP_COLOR  = Color3.fromRGB(255, 0, 100)
 local TEXT_COLOR = Color3.fromRGB(255, 255, 255)
 
-local ACCESSORY_PREFIXES = { "accessory", "belt", "hat", "hair", "vest", "shirt", "pants" }
+-- Known R6 and R15 body part names — these are NEVER items
+local BODY_PARTS = {
+    ["Head"] = true,
+    ["Torso"] = true, ["UpperTorso"] = true, ["LowerTorso"] = true,
+    ["HumanoidRootPart"] = true,
+    ["Left Arm"] = true, ["Right Arm"] = true,
+    ["Left Leg"] = true, ["Right Leg"] = true,
+    ["LeftUpperArm"] = true, ["LeftLowerArm"] = true, ["LeftHand"] = true,
+    ["RightUpperArm"] = true, ["RightLowerArm"] = true, ["RightHand"] = true,
+    ["LeftUpperLeg"] = true, ["LeftLowerLeg"] = true, ["LeftFoot"] = true,
+    ["RightUpperLeg"] = true, ["RightLowerLeg"] = true, ["RightFoot"] = true,
+}
 
--- Characters folder (player gear is parented here)
+-- Accessory-style prefixes (for the sub-toggle)
+local ACCESSORY_PREFIXES = { "accessory", "belt", "hat", "hair", "vest", "shirt", "pants", "backpack", "knapsack", "gear" }
+
 local CharactersFolder = Workspace:WaitForChild("Characters", 5)
 
--- ── Helpers ────────────────────────────────────────────────
 local function checkIsAccessory(name)
+    -- Reject anything that is a known body part name
+    if BODY_PARTS[name] then return false end
     local lowerName = name:lower()
     for _, prefix in ipairs(ACCESSORY_PREFIXES) do
         if string.sub(lowerName, 1, #prefix) == prefix then return true end
@@ -28,35 +42,53 @@ local function checkIsAccessory(name)
     return false
 end
 
--- Check if a model is worn/held by a player (using the working logic)
 local function isWornByPlayer(instance)
     if not instance or not instance.Parent then return false end
-    
-    -- Check A: inside the Characters folder but not the root player model
-    if CharactersFolder and instance:IsDescendantOf(CharactersFolder) then
-        if instance ~= LocalPlayer.Character and instance.Parent ~= CharactersFolder then
-            return true
-        end
+
+    -- Reject models whose name is a body part — these are limb meshes, not gear
+    if BODY_PARTS[instance.Name] then return false end
+
+    -- Must be a Model with at least one BasePart to be a wearable item
+    if not instance:IsA("Model") then return false end
+    if not (instance.PrimaryPart or instance:FindFirstChildWhichIsA("BasePart") or instance:FindFirstChildWhichIsA("MeshPart")) then
+        return false
     end
 
-    -- Check B: traverse up looking for Equipment folder or Humanoid
-    local currentParent = instance.Parent
+    -- Check A: inside Characters folder but not a top-level character model
+    if CharactersFolder and instance:IsDescendantOf(CharactersFolder) then
+        -- Top-level entries in Characters are the player models themselves — skip them
+        if instance.Parent == CharactersFolder then return false end
+        -- Must not be LocalPlayer's own character
+        if LocalPlayer.Character and instance:IsDescendantOf(LocalPlayer.Character) then return false end
+        return true
+    end
+
+    -- Check B: traverse up looking for an Equipment folder or a Humanoid
+    -- (covers games that don't use a Characters folder)
+    local cur   = instance.Parent
     local loops = 0
-    while currentParent and currentParent ~= Workspace and loops < 5 do
-        if not currentParent or not currentParent.Parent then break end
-        if currentParent.Name == "Equipment" or currentParent:FindFirstChildOfClass("Humanoid") then
-            if currentParent ~= LocalPlayer.Character then
+    while cur and cur ~= Workspace and loops < 6 do
+        if not cur.Parent then break end
+        -- If we find an Equipment folder or a model containing a Humanoid,
+        -- this instance is worn/held by someone
+        if cur.Name == "Equipment" then
+            if LocalPlayer.Character and not instance:IsDescendantOf(LocalPlayer.Character) then
                 return true
             end
         end
-        currentParent = currentParent.Parent
+        if cur:FindFirstChildOfClass("Humanoid") then
+            -- Make sure it's not our own character
+            if cur ~= LocalPlayer.Character then
+                return true
+            end
+        end
+        cur   = cur.Parent
         loops = loops + 1
     end
 
     return false
 end
 
--- ── Apply / remove ─────────────────────────────────────────
 local function applyESP(model)
     if model:FindFirstChild("_ItemESP") then return end
 
@@ -93,28 +125,25 @@ local function applyESP(model)
     lbl.TextStrokeTransparency = 0
     lbl.Parent                 = bb
 
-    -- FIXED THREAD: Threads stay alive to continuously monitor global script state updates
     task.spawn(function()
         while model and model.Parent and anchorPart and anchorPart.Parent do
             local myChar = LocalPlayer.Character
             local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-            
-            -- Dynamic master toggle check
+
             if not ItemESP.Enabled then
                 hl.Enabled = false
                 bb.Enabled = false
             elseif myRoot then
                 local dist    = math.floor((myRoot.Position - anchorPart.Position).Magnitude)
                 local inRange = dist <= ItemESP.MaxDistance
-                
-                -- Dynamic Accessory feature toggle check
+
                 local isAcc = checkIsAccessory(model.Name)
                 if isAcc and not ItemESP.Accessories then
                     hl.Enabled = false
                     bb.Enabled = false
                 else
-                    hl.Enabled    = inRange
-                    bb.Enabled    = inRange
+                    hl.Enabled = inRange
+                    bb.Enabled = inRange
                     if inRange then
                         lbl.Text = model.Name .. " [" .. dist .. "m]"
                     end
@@ -132,13 +161,11 @@ local function removeESP(model)
     if bb then bb:Destroy() end
 end
 
--- ── Evaluate a model ───────────────────────────────────────
 local function evaluate(instance)
     if not instance or not instance.Parent then return end
     if not instance:IsA("Model") then return end
+    if BODY_PARTS[instance.Name] then return end  -- fast reject body parts
 
-    -- FIXED GATEWAY: Allows initialization and background event registration 
-    -- to hook models natively regardless of startup toggle state
     if isWornByPlayer(instance) then
         applyESP(instance)
     else
@@ -152,10 +179,8 @@ local function scanAll()
     end
 end
 
--- ── Public API ─────────────────────────────────────────────
 function ItemESP:SetEnabled(state)
     self.Enabled = state
-    -- Instantly wakes up the rendering loop states instead of forcing full map lag loops
 end
 
 function ItemESP:SetAccessories(state)
@@ -166,7 +191,7 @@ function ItemESP:Init()
     scanAll()
 
     Workspace.DescendantAdded:Connect(function(desc)
-        task.wait(0.1) -- Maintain your network replication buffer
+        task.wait(0.1)
         pcall(function() evaluate(desc) end)
     end)
 
@@ -177,7 +202,6 @@ end
 
 function ItemESP:Destroy()
     self.Enabled = false
-    -- Clears components natively via the individual run threads safely
 end
 
 return ItemESP
