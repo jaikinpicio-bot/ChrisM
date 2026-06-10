@@ -1014,6 +1014,87 @@ function UI.makeSpacer(col, height)
     return f
 end
 
+-- Color picker row (opens a TextBox for hex input + colored swatch)
+function UI.makeColorPickerRow(col, labelText, defaultColor, onChanged)
+    local r = baseRow(col, 32)
+
+    label(r, {
+        Position       = UDim2.new(0, 6, 0, 0),
+        Size           = UDim2.new(0.5, 0, 1, 0),
+        Text           = labelText,
+        TextColor3     = C.text1,
+        TextSize       = 12,
+        FontFace       = FONT_REG,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+
+    -- Colour swatch
+    local swatch = Instance.new("Frame")
+    swatch.Size             = UDim2.new(0, 18, 0, 18)
+    swatch.AnchorPoint      = Vector2.new(1, 0.5)
+    swatch.Position         = UDim2.new(1, -4, 0.5, 0)
+    swatch.BackgroundColor3 = defaultColor or C.accent
+    swatch.BorderSizePixel  = 0
+    swatch.Parent           = r
+    corner(swatch, 4)
+    stroke(swatch, C.border2, 1)
+
+    -- Hex input box
+    local function color3ToHex(c3)
+        return string.format("%02X%02X%02X",
+            math.floor(c3.R * 255),
+            math.floor(c3.G * 255),
+            math.floor(c3.B * 255))
+    end
+
+    local function hexToColor3(hex)
+        hex = hex:gsub("#", "")
+        if #hex ~= 6 then return nil end
+        local r2 = tonumber(hex:sub(1,2), 16)
+        local g2 = tonumber(hex:sub(3,4), 16)
+        local b2 = tonumber(hex:sub(5,6), 16)
+        if not (r2 and g2 and b2) then return nil end
+        return Color3.fromRGB(r2, g2, b2)
+    end
+
+    local box = Instance.new("TextBox")
+    box.Size             = UDim2.new(0, 72, 0, 20)
+    box.AnchorPoint      = Vector2.new(1, 0.5)
+    box.Position         = UDim2.new(1, -28, 0.5, 0)
+    box.BackgroundColor3 = C.bg3
+    box.BorderSizePixel  = 0
+    box.Text             = "#" .. color3ToHex(defaultColor or C.accent)
+    box.PlaceholderText  = "#RRGGBB"
+    box.PlaceholderColor3 = C.text3
+    box.TextColor3       = C.accent2
+    box.TextSize         = 11
+    box.FontFace         = FONT_REG
+    box.ClearTextOnFocus = false
+    box.Parent           = r
+    corner(box, 4)
+    local bStroke = stroke(box, C.border, 1)
+
+    box.Focused:Connect(function()   tween(bStroke, {Color = C.accent}) end)
+    box.FocusLost:Connect(function()
+        tween(bStroke, {Color = C.border})
+        local col2 = hexToColor3(box.Text)
+        if col2 then
+            swatch.BackgroundColor3 = col2
+            box.Text = "#" .. color3ToHex(col2)
+            if onChanged then onChanged(col2) end
+        else
+            box.Text = "#" .. color3ToHex(swatch.BackgroundColor3)
+        end
+    end)
+
+    return r, function() return swatch.BackgroundColor3 end
+end
+
+-- Dropdown row variant that returns index too
+function UI.makeValueDropdownRow(col, labelText, options, defaultIndex, onChanged)
+    return UI.makeDropdownRow(col, labelText, options, defaultIndex, onChanged)
+end
+
 -- ══════════════════════════════════════════
 -- PAGE BUILDER PUBLIC API
 -- ══════════════════════════════════════════
