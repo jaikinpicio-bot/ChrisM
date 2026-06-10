@@ -11,8 +11,12 @@ local function load(path)
     if not fn then
         error("❌ COMPILE ERROR in " .. path .. ": " .. tostring(err), 2)
     end
+    local ok, result = pcall(fn)
+    if not ok then
+        error("❌ RUNTIME ERROR in " .. path .. ": " .. tostring(result), 2)
+    end
     print("✅ OK: " .. path)
-    return fn()
+    return result
 end
 
 local Aimbot     = load("Aimbot.lua")
@@ -22,6 +26,20 @@ local Teleport   = load("Teleport.lua")
 local ItemESP    = load("ItemESP.lua")
 local EventESP   = load("EventESP.lua")
 local UI         = load("UI.lua")
+
+-- Sanity check all critical UI functions exist before proceeding
+local required = {
+    "makePage","getCol","makeSectionLabel","makeToggleRow","makeSubToggleRow",
+    "makeSliderRow","makeDropdownRow","makeInputRow","makeActionBtn",
+    "makeStatusLabel","makeSpacer","setupNavigation","switchTo",
+    "setupDrag","setupWindowControls","toast","mount"
+}
+for _, fn in ipairs(required) do
+    if type(UI[fn]) ~= "function" then
+        error("❌ UI missing function: " .. fn)
+    end
+end
+print("✅ UI API verified")
 
 Aimbot:Init()
 ESP:Init()
@@ -72,7 +90,6 @@ end)
 -- LEGIT PAGE  (nav key: "legit")
 -- ══════════════════════════════════════════
 UI.makePage("legit")
--- (reserved for future legit aimbot options)
 
 -- ══════════════════════════════════════════
 -- VISUALS PAGE  (nav key: "visuals")
@@ -81,7 +98,6 @@ UI.makePage("visuals")
 local vL = UI.getCol("visuals", "left")
 local vR = UI.getCol("visuals", "right")
 
--- Left column — Player ESP
 UI.makeSectionLabel(vL, "Player ESP")
 
 local subChams, subHealth, subBoxes, subNames, subWeapon, subSkeleton, subZombies
@@ -110,7 +126,6 @@ UI.makeSliderRow(vL, "ESP Distance (m)", 10, 5000, 500, function(val)
     ESP.MaxDistance = val
 end)
 
--- Right column — Item ESP + Event ESP
 UI.makeSectionLabel(vR, "Item ESP")
 
 local subAccessories
@@ -162,7 +177,7 @@ local mL = UI.getCol("movement", "left")
 
 UI.makeSectionLabel(mL, "Teleport")
 
-local _, getUsername = UI.makeInputRow(mL, "Target Username", "Enter username...")
+local inputRow, getUsername = UI.makeInputRow(mL, "Target Username", "Enter username...")
 
 UI.makeSliderRow(mL, "Behind Offset (studs)", 1, 30, 15, function(val)
     Teleport.BehindOffset = val
@@ -223,7 +238,6 @@ end)
 -- MISC PAGE  (nav key: "misc")
 -- ══════════════════════════════════════════
 UI.makePage("misc")
--- (reserved for future misc options)
 
 -- ══════════════════════════════════════════
 -- NAVIGATION + DRAG + WINDOW CONTROLS
