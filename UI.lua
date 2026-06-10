@@ -1,6 +1,6 @@
 -- =====================
 -- MODULE: UI
--- ChrisM Hub — Neverlose-style layout
+-- ChrisM Hub
 -- =====================
 local TweenService      = game:GetService("TweenService")
 local UserInputService  = game:GetService("UserInputService")
@@ -61,6 +61,7 @@ ScreenGui.Name           = "ChrisMHubGui"
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.ResetOnSpawn   = false
 ScreenGui.DisplayOrder   = 10
+ScreenGui.IgnoreGuiInset = true
 
 -- Main panel
 local Panel = Instance.new("Frame")
