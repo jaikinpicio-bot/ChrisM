@@ -1,662 +1,225 @@
 -- =====================
--- MAIN: ChrisM Hub
+-- MODULE: Crosshair
+-- Executor Drawing-based crosshair with full config
 -- =====================
-local BASE         = "https://raw.githubusercontent.com/jaikinpicio-bot/ChrisM/main/"
-local TweenService = game:GetService("TweenService")
-local RunService   = game:GetService("RunService")
-local CoreGui      = game:GetService("CoreGui")
-local Players      = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService       = game:GetService("RunService")
 
-local LocalPlayer = Players.LocalPlayer
-local PlayerGui   = LocalPlayer:WaitForChild("PlayerGui")
+local Crosshair = {}
 
-local MODULES = {
-    "Aimbot.lua", "ESP.lua", "Fullbright.lua",
-    "Teleport.lua", "ItemESP.lua", "EventESP.lua", "UI.lua"
-}
+-- ── Default config ─────────────────────────────────────────
+Crosshair.Enabled       = true   -- Defaulted to true so it immediately shows up on injection
+Crosshair.Style         = "cross"   -- "cross" | "circle" | "dot" | "cross+circle" | "t"
+Crosshair.Length        = 10
+Crosshair.Thickness     = 2
+Crosshair.Gap           = 4
+Crosshair.DotSize       = 2         -- Changed from 0 to 2 so "dot" style is actually visible
+Crosshair.Opacity       = 1.0       -- 1.0 = Fully Visible / Solid
+Crosshair.OutlineWidth  = 1
+Crosshair.Color         = Color3.fromRGB(0, 255, 136)
+Crosshair.OutlineColor  = Color3.fromRGB(0, 0, 0)
+Crosshair.ShowTop       = true
+Crosshair.ShowBottom    = true
+Crosshair.ShowLeft      = true
+Crosshair.ShowRight     = true
+Crosshair.Dynamic       = false     -- expands on movement
 
--- Shared progress state written by loader, read by both animations
-local loadProgress = {
-    done    = 0,
-    total   = #MODULES,
-    current = "",
-    allDone = false,
-}
+-- ── Internal state ─────────────────────────────────────────
+local drawings   = {}
+local renderConn = nil
+local dynExpand  = 0     -- current dynamic spread offset
 
--- ══════════════════════════════════════════
--- IN-GAME LOADING SCREEN
--- Full-screen overlay, appears before anything else
--- ══════════════════════════════════════════
-local LoadGui = Instance.new("ScreenGui")
-LoadGui.Name            = "ChrisMLoadScreen"
-LoadGui.DisplayOrder    = 999
-LoadGui.ResetOnSpawn    = false
-LoadGui.ZIndexBehavior  = Enum.ZIndexBehavior.Sibling
-LoadGui.IgnoreGuiInset  = true  -- stretch to true top-left, no topbar gap
-LoadGui.Parent          = PlayerGui
-
--- Dark full-screen backdrop
-local Backdrop = Instance.new("Frame")
-Backdrop.Name             = "Backdrop"
-Backdrop.Size             = UDim2.new(1, 0, 1, 0)
-Backdrop.BackgroundColor3 = Color3.fromRGB(10, 10, 14)
-Backdrop.BorderSizePixel  = 0
-Backdrop.Parent           = LoadGui
-
--- Subtle grid pattern overlay (thin lines)
-local GridOverlay = Instance.new("Frame")
-GridOverlay.Size             = UDim2.new(1, 0, 1, 0)
-GridOverlay.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-GridOverlay.BackgroundTransparency = 0.97
-GridOverlay.BorderSizePixel  = 0
-GridOverlay.Parent           = Backdrop
-
--- Center card
-local Card = Instance.new("Frame")
-Card.Name             = "Card"
-Card.Size             = UDim2.new(0, 360, 0, 220)
-Card.AnchorPoint      = Vector2.new(0.5, 0.5)
-Card.Position         = UDim2.new(0.5, 0, 0.5, 0)
-Card.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
-Card.BorderSizePixel  = 0
-Card.Parent           = Backdrop
-local _cc = Instance.new("UICorner"); _cc.CornerRadius = UDim.new(0, 14); _cc.Parent = Card
-local _cs = Instance.new("UIStroke")
-_cs.Color     = Color3.fromRGB(60, 80, 160)
-_cs.Thickness = 1
-_cs.Parent    = Card
-
--- Logo badge
-local LogoBadge = Instance.new("Frame")
-LogoBadge.Size             = UDim2.new(0, 48, 0, 48)
-LogoBadge.AnchorPoint      = Vector2.new(0.5, 0)
-LogoBadge.Position         = UDim2.new(0.5, 0, 0, 28)
-LogoBadge.BackgroundColor3 = Color3.fromRGB(70, 110, 210)
-LogoBadge.BorderSizePixel  = 0
-LogoBadge.Parent           = Card
-local _lbc = Instance.new("UICorner"); _lbc.CornerRadius = UDim.new(0, 12); _lbc.Parent = LogoBadge
-
-local LogoText = Instance.new("TextLabel")
-LogoText.Size             = UDim2.new(1, 0, 1, 0)
-LogoText.BackgroundTransparency = 1
-LogoText.Text             = "CM"
-LogoText.TextColor3       = Color3.new(1, 1, 1)
-LogoText.TextSize         = 18
-LogoText.Font             = Enum.Font.GothamBold
-LogoText.Parent           = LogoBadge
-
--- Title
-local TitleLbl = Instance.new("TextLabel")
-TitleLbl.Size             = UDim2.new(1, -32, 0, 22)
-TitleLbl.AnchorPoint      = Vector2.new(0.5, 0)
-TitleLbl.Position         = UDim2.new(0.5, 0, 0, 86)
-TitleLbl.BackgroundTransparency = 1
-TitleLbl.Text             = "ChrisM Hub"
-TitleLbl.TextColor3       = Color3.fromRGB(235, 235, 245)
-TitleLbl.TextSize         = 20
-TitleLbl.Font             = Enum.Font.GothamBold
-TitleLbl.Parent           = Card
-
--- Subtitle / current module
-local SubLbl = Instance.new("TextLabel")
-SubLbl.Size             = UDim2.new(1, -32, 0, 16)
-SubLbl.AnchorPoint      = Vector2.new(0.5, 0)
-SubLbl.Position         = UDim2.new(0.5, 0, 0, 112)
-SubLbl.BackgroundTransparency = 1
-SubLbl.Text             = "Initialising..."
-SubLbl.TextColor3       = Color3.fromRGB(90, 110, 180)
-SubLbl.TextSize         = 12
-SubLbl.Font             = Enum.Font.Gotham
-SubLbl.Parent           = Card
-
--- Progress track background
-local TrackBg = Instance.new("Frame")
-TrackBg.Size             = UDim2.new(1, -48, 0, 4)
-TrackBg.AnchorPoint      = Vector2.new(0.5, 0)
-TrackBg.Position         = UDim2.new(0.5, 0, 0, 144)
-TrackBg.BackgroundColor3 = Color3.fromRGB(30, 32, 48)
-TrackBg.BorderSizePixel  = 0
-TrackBg.ClipsDescendants = true
-TrackBg.Parent           = Card
-local _tbc = Instance.new("UICorner"); _tbc.CornerRadius = UDim.new(0, 2); _tbc.Parent = TrackBg
-
--- Progress fill
-local TrackFill = Instance.new("Frame")
-TrackFill.Size             = UDim2.new(0, 0, 1, 0)
-TrackFill.BackgroundColor3 = Color3.fromRGB(80, 120, 220)
-TrackFill.BorderSizePixel  = 0
-TrackFill.Parent           = TrackBg
-local _tfc = Instance.new("UICorner"); _tfc.CornerRadius = UDim.new(0, 2); _tfc.Parent = TrackFill
-
--- Step dots row
-local DotsFrame = Instance.new("Frame")
-DotsFrame.Size             = UDim2.new(1, -48, 0, 10)
-DotsFrame.AnchorPoint      = Vector2.new(0.5, 0)
-DotsFrame.Position         = UDim2.new(0.5, 0, 0, 156)
-DotsFrame.BackgroundTransparency = 1
-DotsFrame.BorderSizePixel  = 0
-DotsFrame.Parent           = Card
-
-local DotsLayout = Instance.new("UIListLayout")
-DotsLayout.FillDirection  = Enum.FillDirection.Horizontal
-DotsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-DotsLayout.VerticalAlignment   = Enum.VerticalAlignment.Center
-DotsLayout.Padding        = UDim.new(0, 7)
-DotsLayout.Parent         = DotsFrame
-
--- One dot per module
-local dots = {}
-for i = 1, #MODULES do
-    local dot = Instance.new("Frame")
-    dot.Size             = UDim2.new(0, 6, 0, 6)
-    dot.BackgroundColor3 = Color3.fromRGB(35, 38, 60)
-    dot.BorderSizePixel  = 0
-    dot.Parent           = DotsFrame
-    local _dc = Instance.new("UICorner"); _dc.CornerRadius = UDim.new(0, 3); _dc.Parent = dot
-    dots[i] = dot
+-- ── Drawing helpers ────────────────────────────────────────
+local function newLine()
+    local l = Drawing.new("Line")
+    l.Visible   = false
+    l.Thickness = 1
+    l.Color     = Color3.new(1,1,1)
+    return l
 end
 
--- Module name chips row
-local NamesFrame = Instance.new("Frame")
-NamesFrame.Size             = UDim2.new(1, -32, 0, 18)
-NamesFrame.AnchorPoint      = Vector2.new(0.5, 0)
-NamesFrame.Position         = UDim2.new(0.5, 0, 0, 176)
-NamesFrame.BackgroundTransparency = 1
-NamesFrame.BorderSizePixel  = 0
-NamesFrame.Parent           = Card
-
-local NamesLayout = Instance.new("UIListLayout")
-NamesLayout.FillDirection  = Enum.FillDirection.Horizontal
-NamesLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-NamesLayout.VerticalAlignment   = Enum.VerticalAlignment.Center
-NamesLayout.Padding        = UDim.new(0, 4)
-NamesLayout.Parent         = NamesFrame
-
-local moduleChips = {}
-for i, mod in ipairs(MODULES) do
-    local name = mod:gsub("%.lua$", "")
-    local chip = Instance.new("TextLabel")
-    chip.Size             = UDim2.new(0, 0, 1, 0)
-    chip.AutomaticSize    = Enum.AutomaticSize.X
-    chip.BackgroundColor3 = Color3.fromRGB(22, 24, 38)
-    chip.BackgroundTransparency = 0
-    chip.BorderSizePixel  = 0
-    chip.Text             = name
-    chip.TextColor3       = Color3.fromRGB(50, 55, 90)
-    chip.TextSize         = 9
-    chip.Font             = Enum.Font.GothamBold
-    chip.Parent           = NamesFrame
-    local _cc2 = Instance.new("UICorner"); _cc2.CornerRadius = UDim.new(0, 4); _cc2.Parent = chip
-    local _cp  = Instance.new("UIPadding")
-    _cp.PaddingLeft  = UDim.new(0, 5); _cp.PaddingRight  = UDim.new(0, 5)
-    _cp.PaddingTop   = UDim.new(0, 2); _cp.PaddingBottom = UDim.new(0, 2)
-    _cp.Parent = chip
-    moduleChips[i] = chip
+local function newCircle()
+    local c = Drawing.new("Circle")
+    c.Visible   = false
+    c.Thickness = 1
+    c.Filled    = false
+    c.Color     = Color3.new(1,1,1)
+    c.NumSides  = 64
+    return c
 end
 
--- Version / branding footer
-local FooterLbl = Instance.new("TextLabel")
-FooterLbl.Size             = UDim2.new(1, -32, 0, 14)
-FooterLbl.AnchorPoint      = Vector2.new(0.5, 1)
-FooterLbl.Position         = UDim2.new(0.5, 0, 1, -10)
-FooterLbl.BackgroundTransparency = 1
-FooterLbl.Text             = "Apocolypse Rising 2  •  v1.0"
-FooterLbl.TextColor3       = Color3.fromRGB(45, 48, 75)
-FooterLbl.TextSize         = 10
-FooterLbl.Font             = Enum.Font.Gotham
-FooterLbl.Parent           = Card
+local function newDot()
+    local d = Drawing.new("Circle")
+    d.Visible  = false
+    d.Thickness = 1
+    d.Filled   = true
+    d.Color    = Color3.new(1,1,1)
+    d.NumSides = 32
+    return d
+end
 
--- Animate progress bar and dots as modules load
-local screenConn
-screenConn = RunService.Heartbeat:Connect(function()
-    local pct = loadProgress.done / loadProgress.total
+local function destroyAll()
+    for _, d in ipairs(drawings) do
+        pcall(function() d:Remove() end)
+    end
+    drawings = {}
+end
 
-    -- Smooth fill tween target
-    TweenService:Create(TrackFill, TweenInfo.new(0.3, Enum.EasingStyle.Quart), {
-        Size = UDim2.new(pct, 0, 1, 0)
-    }):Play()
+local function allocate()
+    destroyAll()
+    for i = 1, 8  do drawings[i]  = newLine()   end
+    for i = 9, 10 do drawings[i]  = newCircle() end
+    for i = 11,12 do drawings[i]  = newDot()    end
+end
 
-    -- Update subtitle
-    if loadProgress.allDone then
-        SubLbl.Text      = "Ready"
-        SubLbl.TextColor3 = Color3.fromRGB(50, 195, 100)
-    elseif loadProgress.current ~= "" then
-        SubLbl.Text = "Loading  " .. loadProgress.current .. "..."
+-- ── Render ─────────────────────────────────────────────────
+local function render()
+    if not Crosshair.Enabled then
+        for _, d in ipairs(drawings) do d.Visible = false end
+        return
     end
 
-    -- Light up dots and chips for completed modules
-    for i = 1, #MODULES do
-        if i <= loadProgress.done then
-            TweenService:Create(dots[i], TweenInfo.new(0.2), {
-                BackgroundColor3 = Color3.fromRGB(80, 120, 220)
-            }):Play()
-            moduleChips[i].TextColor3 = Color3.fromRGB(110, 155, 255)
-        end
-        -- Pulse the currently-loading one
-        if i == loadProgress.done + 1 then
-            local pulse = math.abs(math.sin(os.clock() * 4))
-            dots[i].BackgroundColor3 = Color3.fromRGB(
-                math.floor(50 + pulse * 60),
-                math.floor(60 + pulse * 80),
-                math.floor(120 + pulse * 100)
-            )
-            moduleChips[i].TextColor3 = Color3.fromRGB(
-                math.floor(60 + pulse * 80),
-                math.floor(70 + pulse * 90),
-                math.floor(140 + pulse * 100)
-            )
-        end
-    end
-end)
+    local cursor = UserInputService:GetMouseLocation()
+    local cx, cy = cursor.X, cursor.Y
 
--- Dismiss: fade out after all loaded + brief hold
-local function dismissLoadScreen()
-    screenConn:Disconnect()
-    task.wait(0.6) -- brief "Ready" moment
-    TweenService:Create(Backdrop, TweenInfo.new(0.5, Enum.EasingStyle.Quart), {
-        BackgroundTransparency = 1
-    }):Play()
-    TweenService:Create(Card, TweenInfo.new(0.4, Enum.EasingStyle.Quart), {
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0.5, 0, 0.5, -12),
-    }):Play()
-    task.wait(0.55)
-    LoadGui:Destroy()
-end
+    local len   = Crosshair.Length
+    local thick = Crosshair.Thickness
+    local gap   = Crosshair.Gap + dynExpand
+    local col   = Crosshair.Color
+    local ocol  = Crosshair.OutlineColor
+    local ow    = Crosshair.OutlineWidth
+    local alpha = Crosshair.Opacity
+    local style = Crosshair.Style
+    local dotR  = Crosshair.DotSize
 
--- ══════════════════════════════════════════
--- DEV CONSOLE LOADER (kept from before)
--- ══════════════════════════════════════════
-local ANIM_SPEED  = 7
-local COLOR_DIM   = "2a2a3a"
-local COLOR_BRIGHT= "6e9bff"
-local COLOR_WHITE = "eeeef5"
-
-local function findClientLogFrame()
-    local master = CoreGui:FindFirstChild("DevConsoleMaster")
-    if not master then return nil end
-    for _, d in ipairs(master:GetDescendants()) do
-        if d:IsA("ScrollingFrame") and d.Name == "ClientLog" then return d end
-    end
-    return nil
-end
-
-local logFrame = findClientLogFrame()
-if not logFrame then
-    repeat task.wait(0.3); logFrame = findClientLogFrame() until logFrame
-end
-
-if logFrame:FindFirstChild("ChrisMLoader") then
-    logFrame.ChrisMLoader:Destroy()
-end
-
-local loaderLabel = Instance.new("TextLabel")
-loaderLabel.Name               = "ChrisMLoader"
-loaderLabel.Size               = UDim2.new(1, 0, 0, 44)
-loaderLabel.BackgroundTransparency = 1
-loaderLabel.TextColor3         = Color3.fromRGB(255,255,255)
-loaderLabel.TextXAlignment     = Enum.TextXAlignment.Center
-loaderLabel.Font               = Enum.Font.Code
-loaderLabel.TextSize           = 20
-loaderLabel.RichText           = true
-loaderLabel.LayoutOrder        = -999
-loaderLabel.Parent             = logFrame
-
-local loaderConn
-loaderConn = RunService.RenderStepped:Connect(function()
-    local t    = os.clock() * ANIM_SPEED
-    local word = "ChrisM"
-
-    local animated = ""
-    for i = 1, #word do
-        local wave = math.sin(t - i * 0.75)
-        local hex  = wave > 0.3 and COLOR_WHITE or (wave > -0.2 and COLOR_BRIGHT or COLOR_DIM)
-        animated = animated .. string.format('<font color="#%s">%s</font>', hex, word:sub(i,i))
+    -- Dynamic expansion
+    if Crosshair.Dynamic then
+        local vel   = UserInputService:GetMouseDelta()
+        local speed = math.clamp(vel.Magnitude * 0.3, 0, 12)
+        dynExpand   = dynExpand + (speed - dynExpand) * 0.25
+    else
+        dynExpand = 0
     end
 
-    local BAR_W  = 20
-    local filled = math.floor((loadProgress.done / loadProgress.total) * BAR_W)
-    local bar    = '<font color="#6e9bff">' .. string.rep("█", filled) .. '</font>'
-              .. '<font color="#2a2a3a">' .. string.rep("█", BAR_W - filled) .. '</font>'
+    -- Helper: set a line's properties
+    local function setLine(idx, x1, y1, x2, y2, isOutline)
+        local l = drawings[idx]
+        l.From      = Vector2.new(x1, y1)
+        l.To        = Vector2.new(x2, y2)
+        l.Thickness = isOutline and (thick + ow * 2) or thick
+        l.Color     = isOutline and ocol or col
+        l.Transparency = alpha -- FIXED: Direct map to opacity value for executors
+        l.Visible   = true
+    end
 
-    local statusColor = loadProgress.allDone and "00e676" or "6e9bff"
-    local statusText  = loadProgress.allDone
-        and "READY"
-        or  string.format("%d / %d  %s", loadProgress.done, loadProgress.total,
-                loadProgress.current ~= "" and ("← " .. loadProgress.current) or "")
+    local function hideLine(idx)
+        drawings[idx].Visible = false
+    end
 
-    loaderLabel.Text = string.format(
-        "⚙  %s\n<font color='#%s' size='14'>%s   %s</font>",
-        animated, statusColor, bar, statusText
+    -- Determine which arms to draw
+    local isCrossStyle = (style == "cross" or style == "cross+circle" or style == "t")
+    local showTop      = Crosshair.ShowTop    and isCrossStyle
+    local showBot      = Crosshair.ShowBottom and (style == "cross" or style == "cross+circle") -- T-shape cuts bottom
+    local showLeft     = Crosshair.ShowLeft   and isCrossStyle
+    local showRight    = Crosshair.ShowRight  and isCrossStyle
+
+    -- Cross arms
+    if ow > 0 then
+        if showTop    then setLine(1, cx, cy - gap,       cx, cy - gap - len,   true) else hideLine(1) end
+        if showBot    then setLine(2, cx, cy + gap,       cx, cy + gap + len,   true) else hideLine(2) end
+        if showLeft   then setLine(3, cx - gap, cy,       cx - gap - len, cy,   true) else hideLine(3) end
+        if showRight  then setLine(4, cx + gap, cy,       cx + gap + len, cy,   true) else hideLine(4) end
+    else
+        for i = 1, 4 do hideLine(i) end
+    end
+
+    if showTop    then setLine(5, cx, cy - gap,       cx, cy - gap - len,   false) else hideLine(5) end
+    if showBot    then setLine(6, cx, cy + gap,       cx, cy + gap + len,   false) else hideLine(6) end
+    if showLeft   then setLine(7, cx - gap, cy,       cx - gap - len, cy,   false) else hideLine(7) end
+    if showRight  then setLine(8, cx + gap, cy,       cx + gap + len, false) else hideLine(8) end
+
+    -- Circle
+    local showCircle = (style == "circle" or style == "cross+circle")
+    local circR = gap + len * 0.6
+
+    if showCircle and ow > 0 then
+        local oc = drawings[9]
+        oc.Position     = Vector2.new(cx, cy)
+        oc.Radius       = circR
+        oc.Thickness    = thick + ow * 2
+        oc.Color        = ocol
+        oc.Transparency = alpha
+        oc.Visible      = true
+    else
+        drawings[9].Visible = false
+    end
+
+    if showCircle then
+        local fc = drawings[10]
+        fc.Position     = Vector2.new(cx, cy)
+        fc.Radius       = circR
+        fc.Thickness    = thick
+        fc.Color        = col
+        fc.Transparency = alpha
+        fc.Visible      = true
+    else
+        drawings[10].Visible = false
+    end
+
+    -- Dot
+    local showDot = dotR > 0 and (style == "dot" or style == "cross" or style == "cross+circle" or style == "t")
+    if showDot and ow > 0 then
+        local od = drawings[11]
+        od.Position     = Vector2.new(cx, cy)
+        od.Radius       = dotR + ow
+        od.Color        = ocol
+        od.Transparency = alpha
+        od.Visible      = true
+    else
+        drawings[11].Visible = false
+    end
+
+    if showDot then
+        local fd = drawings[12]
+        fd.Position     = Vector2.new(cx, cy)
+        fd.Radius       = dotR
+        fd.Color        = col
+        fd.Transparency = alpha
+        fd.Visible      = true
+    else
+        drawings[12].Visible = false
+    end
+end
+
+-- ── Public API ─────────────────────────────────────────────
+function Crosshair:SetEnabled(state)
+    self.Enabled = state
+    if not state then
+        for _, d in ipairs(drawings) do d.Visible = false end
+    end
+end
+
+function Crosshair:ApplyConfig(cfg)
+    for k, v in pairs(cfg) do
+        self[k] = v
+    end
+end
+
+function Crosshair:Init()
+    allocate()
+    renderConn = RunService:BindToRenderStep(
+        "CrosshairRender",
+        Enum.RenderPriority.Camera.Value + 2,
+        render
     )
-end)
-
-task.spawn(function()
-    -- Wait until all done (polled by the dismiss logic below)
-    repeat task.wait(0.1) until loadProgress.allDone
-    task.wait(2.2)
-    for i = 1, 10 do
-        loaderLabel.TextTransparency = i / 10
-        task.wait(0.04)
-    end
-    loaderConn:Disconnect()
-    loaderLabel:Destroy()
-end)
-
--- ══════════════════════════════════════════
--- MODULE LOADER
--- ══════════════════════════════════════════
-local function load(path)
-    print("⏳ Loading: " .. path)
-    local src = game:HttpGet(BASE .. path)
-    print("📦 Got " .. #src .. " bytes for: " .. path)
-    local fn, err = loadstring(src)
-    if not fn then
-        error("❌ COMPILE ERROR in " .. path .. ": " .. tostring(err), 2)
-    end
-    local ok, result = pcall(fn)
-    if not ok then
-        error("❌ RUNTIME ERROR in " .. path .. ": " .. tostring(result), 2)
-    end
-    print("✅ OK: " .. path)
-    loadProgress.done    = loadProgress.done + 1
-    loadProgress.current = path:gsub("%.lua$", "")
-    return result
 end
 
-local Crosshair  = load("Crosshair.lua")
-local Aimbot     = load("Aimbot.lua")
-local ESP        = load("ESP.lua")
-local Fullbright = load("Fullbright.lua")
-local Teleport   = load("Teleport.lua")
-local ItemESP    = load("ItemESP.lua")
-local EventESP   = load("EventESP.lua")
-local UI         = load("UI.lua")
-
-loadProgress.allDone = true
-loadProgress.current = ""
-
--- Dismiss screen (waits 0.6s internally, then fades out over 0.5s)
-dismissLoadScreen()
-
--- ══════════════════════════════════════════
--- UI SANITY CHECK
--- ══════════════════════════════════════════
-local required = {
-    "makePage","getCol","makeSectionLabel","makeToggleRow","makeSubToggleRow",
-    "makeSliderRow","makeDropdownRow","makeInputRow","makeActionBtn",
-    "makeStatusLabel","makeSpacer","makeColorPickerRow","setupNavigation","switchTo",
-    "setupDrag","setupWindowControls","toast","mount"
-}
-for _, fn in ipairs(required) do
-    if type(UI[fn]) ~= "function" then
-        error("❌ UI missing function: " .. fn)
+function Crosshair:Destroy()
+    if renderConn then
+        RunService:UnbindFromRenderStep("CrosshairRender")
+        renderConn = nil
     end
+    destroyAll()
 end
-print("✅ UI API verified")
 
-Crosshair:Init()
-Aimbot:Init()
-ESP:Init()
-Teleport:Init()
-ItemESP:Init()
-EventESP:Init()
-
--- ══════════════════════════════════════════
--- COMBAT PAGE  (nav key: "combat")
--- ══════════════════════════════════════════
-UI.makePage("combat")
-local cL = UI.getCol("combat", "left")
-local cR = UI.getCol("combat", "right")
-
-UI.makeSectionLabel(cL, "Aimbot")
-UI.makeToggleRow(cL, "Aimbot", false, function(s)
-    Aimbot:SetEnabled(s)
-    UI.toast("Aimbot", s)
-end)
-UI.makeSubToggleRow(cL, "Wall Check", true, function(s)
-    Aimbot.WallCheck = s
-    UI.toast("Wall Check", s)
-end)
-UI.makeDropdownRow(cL, "Target Bone", {
-    "Head", "HumanoidRootPart", "UpperTorso", "Torso", "RightUpperArm", "LeftUpperArm"
-}, 1, function(val)
-    Aimbot.TargetBone = val
-end)
-UI.makeSliderRow(cL, "Smoothness", 1, 20, 3, function(val)
-    Aimbot.Smooth = val
-end)
-UI.makeSliderRow(cL, "Bullet Velocity (studs/s)", 1, 4625, 800, function(val)
-    Aimbot.BulletVelocity = val
-end)
-
-UI.makeSectionLabel(cR, "FOV")
-UI.makeSliderRow(cR, "FOV Radius (px)", 50, 400, 150, function(val)
-    Aimbot.FOV = val
-    local c = Aimbot:GetOverlayCircle()
-    if c then c.Radius = val end
-end)
-
--- ══════════════════════════════════════════
--- LEGIT PAGE  (nav key: "legit")
--- Crosshair editor
--- ══════════════════════════════════════════
-UI.makePage("legit")
-local lL = UI.getCol("legit", "left")
-local lR = UI.getCol("legit", "right")
-
--- ── Left column: enable + shape + size ───────────────────
-UI.makeSectionLabel(lL, "Crosshair")
-UI.makeToggleRow(lL, "Enable Crosshair", false, function(s)
-    Crosshair:SetEnabled(s)
-    UI.toast("Crosshair", s)
-end)
-
-UI.makeSectionLabel(lL, "Style")
-UI.makeDropdownRow(lL, "Style", {
-    "Cross", "Circle", "Dot only", "Cross + Circle", "T-shape"
-}, 1, function(val)
-    local map = {
-        ["Cross"] = "cross", ["Circle"] = "circle",
-        ["Dot only"] = "dot", ["Cross + Circle"] = "cross+circle",
-        ["T-shape"] = "t"
-    }
-    Crosshair.Style = map[val] or "cross"
-end)
-
-UI.makeSectionLabel(lL, "Size")
-UI.makeSliderRow(lL, "Length",    2, 30, 10, function(v) Crosshair.Length    = v end)
-UI.makeSliderRow(lL, "Thickness", 1,  8,  2, function(v) Crosshair.Thickness = v end)
-UI.makeSliderRow(lL, "Gap",       0, 16,  4, function(v) Crosshair.Gap       = v end)
-UI.makeSliderRow(lL, "Dot size",  0,  8,  0, function(v) Crosshair.DotSize   = v end)
-
-UI.makeSectionLabel(lL, "Arms")
-UI.makeSubToggleRow(lL, "Top",    true,  function(s) Crosshair.ShowTop    = s end)
-UI.makeSubToggleRow(lL, "Bottom", true,  function(s) Crosshair.ShowBottom = s end)
-UI.makeSubToggleRow(lL, "Left",   true,  function(s) Crosshair.ShowLeft   = s end)
-UI.makeSubToggleRow(lL, "Right",  true,  function(s) Crosshair.ShowRight  = s end)
-
--- ── Right column: appearance + outline + options ─────────
-UI.makeSectionLabel(lR, "Colour")
-UI.makeColorPickerRow(lR, "Crosshair color",  Color3.fromRGB(0, 255, 136), function(c)
-    Crosshair.Color = c
-end)
-UI.makeColorPickerRow(lR, "Outline color", Color3.fromRGB(0, 0, 0), function(c)
-    Crosshair.OutlineColor = c
-end)
-
-UI.makeSectionLabel(lR, "Appearance")
-UI.makeSliderRow(lR, "Opacity (%)",     10, 100, 100, function(v) Crosshair.Opacity      = v / 100 end)
-UI.makeSliderRow(lR, "Outline width",    0,   4,   1, function(v) Crosshair.OutlineWidth = v end)
-
-UI.makeSectionLabel(lR, "Behaviour")
-UI.makeSubToggleRow(lR, "Dynamic expand", false, function(s)
-    Crosshair.Dynamic = s
-    UI.toast("Dynamic expand", s)
-end)
-
--- ══════════════════════════════════════════
--- VISUALS PAGE  (nav key: "visuals")
--- ══════════════════════════════════════════
-UI.makePage("visuals")
-local vL = UI.getCol("visuals", "left")
-local vR = UI.getCol("visuals", "right")
-
-UI.makeSectionLabel(vL, "Player ESP")
-
-local subChams, subHealth, subBoxes, subNames, subWeapon, subSkeleton, subZombies
-
-UI.makeToggleRow(vL, "Player ESP", false, function(s)
-    ESP:SetEnabled(s)
-    subChams.Visible    = s
-    subHealth.Visible   = s
-    subBoxes.Visible    = s
-    subNames.Visible    = s
-    subWeapon.Visible   = s
-    subSkeleton.Visible = s
-    subZombies.Visible  = s
-    UI.toast("Player ESP", s)
-end)
-
-subNames    = UI.makeSubToggleRow(vL, "Names",        true,  function(s) ESP.Names = s       UI.toast("Names", s)        end)
-subBoxes    = UI.makeSubToggleRow(vL, "Boxes",        true,  function(s) ESP.Boxes = s       UI.toast("Boxes", s)        end)
-subChams    = UI.makeSubToggleRow(vL, "Chams",        false, function(s) ESP:SetChams(s)     UI.toast("Chams", s)        end)
-subHealth   = UI.makeSubToggleRow(vL, "Health Bars",  false, function(s) ESP.HealthBars = s  UI.toast("Health Bars", s)  end)
-subWeapon   = UI.makeSubToggleRow(vL, "Weapon Label", true,  function(s) ESP.WeaponText = s  UI.toast("Weapon Label", s) end)
-subSkeleton = UI.makeSubToggleRow(vL, "Skeleton",     false, function(s) ESP:SetSkeleton(s)  UI.toast("Skeleton", s)     end)
-subZombies  = UI.makeSubToggleRow(vL, "Zombies",      false, function(s) ESP:SetZombies(s)   UI.toast("Zombies", s)      end)
-
-UI.makeSliderRow(vL, "ESP Distance (m)", 10, 5000, 500, function(val)
-    ESP.MaxDistance = val
-end)
-
-UI.makeSectionLabel(vR, "Item ESP")
-
-local subAccessories
-
-UI.makeToggleRow(vR, "Item ESP", false, function(s)
-    ItemESP:SetEnabled(s)
-    subAccessories.Visible = s
-    UI.toast("Item ESP", s)
-end)
-
-subAccessories = UI.makeSubToggleRow(vR, "Accessories", true, function(s)
-    ItemESP:SetAccessories(s)
-    UI.toast("Accessories", s)
-end)
-
-UI.makeSliderRow(vR, "Item Distance (m)", 50, 5000, 500, function(val)
-    ItemESP.MaxDistance = val
-end)
-
-UI.makeSpacer(vR, 6)
-UI.makeSectionLabel(vR, "Event ESP")
-
-UI.makeToggleRow(vR, "Event ESP", false, function(s)
-    EventESP:SetEnabled(s)
-    UI.toast("Event ESP", s)
-end)
-
-UI.makeSliderRow(vR, "Event Distance (m)", 50, 5000, 1000, function(val)
-    EventESP.MaxDistance = val
-end)
-
--- ══════════════════════════════════════════
--- WORLD PAGE  (nav key: "world")
--- ══════════════════════════════════════════
-UI.makePage("world")
-local wL = UI.getCol("world", "left")
-
-UI.makeSectionLabel(wL, "Lighting")
-UI.makeToggleRow(wL, "Fullbright", false, function(s)
-    Fullbright:SetEnabled(s)
-    UI.toast("Fullbright", s)
-end)
-
--- ══════════════════════════════════════════
--- MOVEMENT PAGE  (nav key: "movement")
--- ══════════════════════════════════════════
-UI.makePage("movement")
-local mL = UI.getCol("movement", "left")
-
-UI.makeSectionLabel(mL, "Teleport")
-
-local inputRow, getUsername = UI.makeInputRow(mL, "Target Username", "Enter username...")
-
-UI.makeSliderRow(mL, "Behind Offset (studs)", 1, 30, 15, function(val)
-    Teleport.BehindOffset = val
-end)
-
-local statusLbl = UI.makeStatusLabel(mL)
-Teleport:OnStatusChange(function(msg, color)
-    statusLbl.Text       = "Status: " .. msg
-    statusLbl.TextColor3 = color
-end)
-
-UI.makeSpacer(mL, 4)
-UI.makeSectionLabel(mL, "Actions")
-
-local instantTPBtn = UI.makeActionBtn(mL, "⚡ One-Time Teleport")
-local startTPBtn   = UI.makeActionBtn(mL, "🔄 Start Loop Tracking", Color3.fromRGB(180, 40, 40))
-local stopTPBtn    = UI.makeActionBtn(mL, "⏹ Stop Tracking",       Color3.fromRGB(46, 46, 46))
-stopTPBtn.TextColor3 = Color3.fromRGB(128, 128, 128)
-
-instantTPBtn.MouseButton1Click:Connect(function()
-    instantTPBtn.Text = "⏳ Teleporting..."
-    Teleport:Once(getUsername(), function(success)
-        if not success then instantTPBtn.Text = "❌ Not Found" end
-        task.delay(1.5, function() instantTPBtn.Text = "⚡ One-Time Teleport" end)
-    end)
-end)
-
-startTPBtn.MouseButton1Click:Connect(function()
-    if Teleport.IsTracking then return end
-    Teleport:StartTracking(
-        getUsername(),
-        function(_target)
-            startTPBtn.Text             = "🟢 Tracking..."
-            startTPBtn.BackgroundColor3 = Color3.fromRGB(40, 160, 40)
-            stopTPBtn.BackgroundColor3  = Color3.fromRGB(0, 213, 255)
-            stopTPBtn.TextColor3        = Color3.new(1, 1, 1)
-        end,
-        function()
-            startTPBtn.Text = "❌ Not Found"
-            task.delay(1.5, function()
-                startTPBtn.Text             = "🔄 Start Loop Tracking"
-                startTPBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-            end)
-        end
-    )
-end)
-
-stopTPBtn.MouseButton1Click:Connect(function()
-    if not Teleport.IsTracking then return end
-    Teleport:StopTracking()
-    startTPBtn.Text             = "🔄 Start Loop Tracking"
-    startTPBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-    stopTPBtn.BackgroundColor3  = Color3.fromRGB(46, 46, 46)
-    stopTPBtn.TextColor3        = Color3.fromRGB(128, 128, 128)
-end)
-
--- ══════════════════════════════════════════
--- MISC PAGE  (nav key: "misc")
--- ══════════════════════════════════════════
-UI.makePage("misc")
-
--- ══════════════════════════════════════════
--- NAVIGATION + DRAG + WINDOW CONTROLS
--- ══════════════════════════════════════════
-UI.setupNavigation()
-UI.switchTo("combat")
-UI.setupDrag()
-UI.setupWindowControls(function()
-    Crosshair:Destroy()
-    Aimbot:Destroy()
-    ESP:Destroy()
-    ItemESP:Destroy()
-    EventESP:Destroy()
-    if Fullbright.Enabled then Fullbright:Remove() end
-    if Teleport.IsTracking then Teleport:StopTracking() end
-end)
-
-UI.mount()
+return Crosshair
