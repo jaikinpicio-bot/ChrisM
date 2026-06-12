@@ -44,7 +44,6 @@ local function newCircle()
     c.Thickness = 1
     c.Filled    = false
     c.Color     = Color3.new(1,1,1)
-    c.NumSides  = 64
     return c
 end
 
@@ -54,7 +53,6 @@ local function newDot()
     d.Thickness = 1
     d.Filled   = true
     d.Color    = Color3.new(1,1,1)
-    d.NumSides = 32
     return d
 end
 
@@ -108,7 +106,7 @@ local function render()
         l.To        = Vector2.new(x2, y2)
         l.Thickness = isOutline and (thick + ow * 2) or thick
         l.Color     = isOutline and ocol or col
-        l.Transparency = alpha -- FIXED: Direct map to opacity value for executors
+        l.Transparency = alpha 
         l.Visible   = true
     end
 
@@ -136,7 +134,7 @@ local function render()
     if showTop    then setLine(5, cx, cy - gap,       cx, cy - gap - len,   false) else hideLine(5) end
     if showBot    then setLine(6, cx, cy + gap,       cx, cy + gap + len,   false) else hideLine(6) end
     if showLeft   then setLine(7, cx - gap, cy,       cx - gap - len, cy,   false) else hideLine(7) end
-    if showRight  then setLine(8, cx + gap, cy,       cx + gap + len, false) else hideLine(8) end
+    if showRight  then setLine(8, cx + gap, cy,       cx + gap + len, cy,   false) else hideLine(8) end -- FIXED PARAMETERS HERE
 
     -- Circle
     local showCircle = (style == "circle" or style == "cross+circle")
