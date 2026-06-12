@@ -6,9 +6,9 @@ local TweenService      = game:GetService("TweenService")
 local UserInputService  = game:GetService("UserInputService")
 local Players           = game:GetService("Players")
 local TextService       = game:GetService("TextService")
+local CoreGui           = game:GetService("CoreGui") -- Refitted for Executor environments
 
 local LocalPlayer = Players.LocalPlayer
-local PlayerGui   = LocalPlayer:WaitForChild("PlayerGui")
 
 local UI = {}
 
@@ -50,8 +50,8 @@ local FONT_REG  = Font.new("rbxasset://fonts/families/SourceSansPro.json", Enum.
 local FONT_MED  = Font.new("rbxasset://fonts/families/SourceSansPro.json", Enum.FontWeight.Medium,   Enum.FontStyle.Normal)
 local FONT_BOLD = Font.new("rbxasset://fonts/families/SourceSansPro.json", Enum.FontWeight.Bold,     Enum.FontStyle.Normal)
 
-local TW_FAST   = TweenInfo.new(0.15, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-local TW_MED    = TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+local TW_FAST    = TweenInfo.new(0.15, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+local TW_MED     = TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 
 -- ══════════════════════════════════════════
 -- ROOT GUI
@@ -176,7 +176,7 @@ label(BrandHeader, {
 label(BrandHeader, {
     Position = UDim2.new(0, 50, 0, 29),
     Size     = UDim2.new(1, -54, 0, 14),
-    Text     = "Apocolypse Rising 2",
+    Text     = "Apocalypse Rising 2", -- Fixed typo
     TextColor3 = C.text2,
     TextSize = 10,
     FontFace = FONT_REG,
@@ -398,7 +398,7 @@ Content.BackgroundTransparency = 1
 Content.BorderSizePixel  = 0
 Content.Parent           = Panel
 
--- Top bar (always visible — doubles as drag handle + title when minimized)
+-- Top bar
 local TopBar = Instance.new("Frame")
 TopBar.Name             = "TopBar"
 TopBar.Size             = UDim2.new(1, 0, 0, BAR_H)
@@ -555,7 +555,6 @@ end
 -- ══════════════════════════════════════════
 -- ROW COMPONENTS
 -- ══════════════════════════════════════════
-
 local function sectionHeader(col, text)
     local f = Instance.new("Frame")
     f.Size             = UDim2.new(1, 0, 0, 26)
@@ -748,7 +747,7 @@ function UI.makeSliderRow(col, labelText, minVal, maxVal, defaultVal, onChanged)
     trackFill.Parent           = trackBg
     corner(trackFill, 2)
 
-    local grad = Instance.new("UIGradient")
+    local grad = Instance.new("UIGradGradient")
     grad.Color = ColorSequence.new{
         ColorSequenceKeypoint.new(0, C.accent),
         ColorSequenceKeypoint.new(1, C.accent2),
@@ -775,7 +774,7 @@ function UI.makeSliderRow(col, labelText, minVal, maxVal, defaultVal, onChanged)
         currentVal = math.floor(minVal + pct * (maxVal - minVal))
         trackFill.Size  = UDim2.new(pct, 0, 1, 0)
         knob.Position   = UDim2.new(pct, 0, 0.5, 0)
-        valLbl.Text     = tostring(currentVal)
+        valLbl.Text      = tostring(currentVal)
         if onChanged then onChanged(currentVal) end
     end
 
@@ -863,7 +862,7 @@ function UI.makeDropdownRow(col, labelText, options, defaultIndex, onChanged)
     listFrame.Position         = UDim2.new(0, 0, 0, CLOSED_H)
     listFrame.BackgroundColor3 = C.bg3
     listFrame.BorderSizePixel  = 0
-    listFrame.ZIndex           = 4
+    listFrame.ZIndex           = 15 -- Pushed high to stop clipping under other lists
     listFrame.Parent           = container
     corner(listFrame, 4)
     stroke(listFrame, C.border2)
@@ -888,7 +887,7 @@ function UI.makeDropdownRow(col, labelText, options, defaultIndex, onChanged)
         optBtn.TextColor3       = (i == selected) and C.accent2 or C.text1
         optBtn.TextSize         = 11
         optBtn.FontFace         = (i == selected) and FONT_BOLD or FONT_REG
-        optBtn.ZIndex           = 5
+        optBtn.ZIndex           = 16
         optBtn.Parent           = listFrame
 
         optBtn.MouseEnter:Connect(function()
@@ -911,6 +910,7 @@ function UI.makeDropdownRow(col, labelText, options, defaultIndex, onChanged)
             optBtn.FontFace   = FONT_BOLD
             selBtn.Text       = opt .. "  ▾"
             open              = false
+            container.ZIndex  = 1 -- Reset priority frame placement
             TweenService:Create(container, TW_FAST, {Size = UDim2.new(1, 0, 0, CLOSED_H)}):Play()
             if onChanged then onChanged(opt) end
         end)
@@ -918,6 +918,7 @@ function UI.makeDropdownRow(col, labelText, options, defaultIndex, onChanged)
 
     selBtn.MouseButton1Click:Connect(function()
         open = not open
+        container.ZIndex = open and 10 or 1 -- Lift frame priority layer when expanded
         local targetH = open and OPEN_H or CLOSED_H
         TweenService:Create(container, TW_MED, {Size = UDim2.new(1, 0, 0, targetH)}):Play()
         selBtn.Text = options[selected] .. (open and "  ▴" or "  ▾")
@@ -1010,11 +1011,9 @@ function UI.makeSectionLabel(col, text)
 end
 
 function UI.makeSpacer(col, height)
-    local f = frame(col, {Size = UDim2.new(1, 0, 0, height or 4)})
-    return f
+    return frame(col, {Size = UDim2.new(1, 0, 0, height or 4)})
 end
 
--- Color picker row (opens a TextBox for hex input + colored swatch)
 function UI.makeColorPickerRow(col, labelText, defaultColor, onChanged)
     local r = baseRow(col, 32)
 
@@ -1028,7 +1027,6 @@ function UI.makeColorPickerRow(col, labelText, defaultColor, onChanged)
         TextXAlignment = Enum.TextXAlignment.Left,
     })
 
-    -- Colour swatch
     local swatch = Instance.new("Frame")
     swatch.Size             = UDim2.new(0, 18, 0, 18)
     swatch.AnchorPoint      = Vector2.new(1, 0.5)
@@ -1039,7 +1037,6 @@ function UI.makeColorPickerRow(col, labelText, defaultColor, onChanged)
     corner(swatch, 4)
     stroke(swatch, C.border2, 1)
 
-    -- Hex input box
     local function color3ToHex(c3)
         return string.format("%02X%02X%02X",
             math.floor(c3.R * 255),
@@ -1090,14 +1087,10 @@ function UI.makeColorPickerRow(col, labelText, defaultColor, onChanged)
     return r, function() return swatch.BackgroundColor3 end
 end
 
--- Dropdown row variant that returns index too
 function UI.makeValueDropdownRow(col, labelText, options, defaultIndex, onChanged)
     return UI.makeDropdownRow(col, labelText, options, defaultIndex, onChanged)
 end
 
--- ══════════════════════════════════════════
--- PAGE BUILDER PUBLIC API
--- ══════════════════════════════════════════
 function UI.makePage(name)
     return makePage(name)
 end
@@ -1150,25 +1143,21 @@ function UI.setupNavigation()
 end
 
 -- ══════════════════════════════════════════
--- MINIMIZE  (collapse to title bar)
+-- MINIMIZE
 -- ══════════════════════════════════════════
 local function setMinimized(state)
     minimized = state
     if state then
-        -- Collapse panel to just the bar height, hide body content
         TweenService:Create(Panel, TW_MED, {
             Size = UDim2.new(0, PANEL_W, 0, BAR_H)
         }):Play()
-        -- Hide sidebar content below brand header
         Sidebar.Visible    = false
         PageContainer.Visible = false
         TopBarDiv.Visible  = false
         MinTitle.Visible   = true
         ConfigBtn.Visible  = false
-        -- Change min button to restore symbol
         MinBtn.Text = "□"
     else
-        -- Restore full size
         TweenService:Create(Panel, TW_MED, {
             Size = UDim2.new(0, PANEL_W, 0, PANEL_H)
         }):Play()
@@ -1200,7 +1189,6 @@ function UI.setupDrag()
         end
     end
 
-    -- Drag from topbar (works both minimized and expanded)
     TopBar.InputBegan:Connect(startDrag)
     BrandHeader.InputBegan:Connect(startDrag)
 
@@ -1223,7 +1211,6 @@ end
 -- WINDOW CONTROLS
 -- ══════════════════════════════════════════
 function UI.setupWindowControls(onClose)
-    -- Close
     CloseBtn.MouseButton1Click:Connect(function()
         if onClose then pcall(onClose) end
         TweenService:Create(Panel, TweenInfo.new(0.18), {
@@ -1233,19 +1220,16 @@ function UI.setupWindowControls(onClose)
         task.delay(0.25, function() ScreenGui:Destroy() end)
     end)
 
-    -- Minimize: collapse to draggable title bar
     MinBtn.MouseButton1Click:Connect(function()
         setMinimized(not minimized)
     end)
 
-    -- Double-click title bar to restore when minimized
     TopBar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 and minimized then
             setMinimized(false)
         end
     end)
 
-    -- Keybind: ] to toggle visibility (both minimized and hidden states)
     UserInputService.InputBegan:Connect(function(input, gp)
         if not gp and input.KeyCode == Enum.KeyCode.RightBracket then
             if minimized then
@@ -1261,7 +1245,7 @@ end
 -- TOAST NOTIFICATIONS
 -- ══════════════════════════════════════════
 local ToastContainer = Instance.new("Frame")
-ToastContainer.Name                 = "ToastContainer"
+ToastContainer.Name                   = "ToastContainer"
 ToastContainer.BackgroundTransparency = 1
 ToastContainer.BorderSizePixel      = 0
 ToastContainer.AnchorPoint          = Vector2.new(1, 1)
@@ -1326,7 +1310,8 @@ end
 -- MOUNT
 -- ══════════════════════════════════════════
 function UI.mount()
-    ScreenGui.Parent = PlayerGui
+    -- Modified to route into CoreGui for anti-cheat avoidance and persistent rendering
+    ScreenGui.Parent = CoreGui
 end
 
 return UI
